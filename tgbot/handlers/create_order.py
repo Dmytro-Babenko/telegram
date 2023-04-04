@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime
 import hashlib
 
@@ -18,17 +19,31 @@ from tgbot.utils.callback_data import subject_cb_data, type_order_cb_data
 
 async def back(message: types.Message, state: FSMContext):
 
+    async def delete_state_value(state_name: str|None):
+        if state:
+            async with state.proxy() as data:
+                state_short_name = state_name.split(':')[1]
+                if data.get(state_short_name):
+                    data.pop(state_short_name)
+
+
     HENDLERS = (
         cancel_order, start_creating, ask_to_choose_sb, 
-        ask_to_choose_date, ask_to_choose_time, ask_to_choose_uni)
+        ask_to_choose_date, ask_to_choose_time, ask_to_choose_uni,
+        ask_to_choose_theeme_var, ask_to_send_files,
+        )
+    
     back_hendlers = {
         state_name:hendler for state_name, hendler 
         in zip(FSMCreateOrder.all_states_names, HENDLERS)
         }
     
     back_hendler = back_hendlers.get(await state.get_state(), cancel_order)
+
+    current_state_name = await state.get_state()
     await FSMCreateOrder.previous()
     previous_state_name = await state.get_state()
+    #удаление текущего
     if previous_state_name:
         async with state.proxy() as data:
             data.pop(previous_state_name.split(':')[1])
@@ -101,12 +116,14 @@ async def choose_uni(message:types.Message, state:FSMContext):
         async with state.proxy() as data:
             data['university'] = message.text
         await FSMCreateOrder.next()
-        await ask_to_send_files(message)
+        await ask_to_choose_theeme_var(message)
+        async with state.proxy() as data:
+            data['files'] = []
     else:
         await message.answer('Скористайтесь кнопкою пошук')
 
-async def ask_to_send_files(message:types.Message, *args):
-    await message.answer('Відправте файли')
+async def ask_to_choose_theeme_var(message:types.Message, *args):
+    await message.answer('Напишіть тему')
 
 async def set_uni_variants(query:types.InlineQuery, variants:list):
 
@@ -128,35 +145,85 @@ async def set_uni_variants(query:types.InlineQuery, variants:list):
 
     await query.answer(results=items[:49], cache_time=1, is_personal=True)
 
-async def save_files(message: types.Message):
-    # finish_message_id = message.message_id
-    # chat_id = message.chat.id
-    print(message)
-    file_id = message.document.file_id
-    file_name = message.document.file_name
-    bot = message.bot
-    await bot.download_file_by_id(file_id=file_id, destination=file_name)
-    await message.answer('Done')
-    # bot
-    # print(type(message.chat.ge))  
-    # a = types.Message(message_id=finish_message_id,
-    #             # date=datetime.datetime.now(),
-    #             chat=types.Chat(id=chat_id, type="private"))
-    # print(a.text, message.text)
+async def choose_theeme_or_variant(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['t_or_v'] = message.text
+    await FSMCreateOrder.next()
+    await ask_to_send_files(message)
 
-    #сохранняем на последнем єтапе, скасувати - очищает список, словарь, номер файла(длина словаря)
+async def ask_to_send_files(message:types.Message, *args):
+    await message.answer('Відправте файли', reply_markup=reply_kb.make_create_order_kb(confirm=True, cancel_files=True))
+
+def get_file_id_and_stem(message: types.Message):
+    file_id = message.document.file_id
+    file_stem = f'.{message.document.file_name.split(".")[-1]}'
+    return file_id, file_stem
+
+async def get_files(message: types.Message, state: FSMContext):
+    file_id, file_stem = get_file_id_and_stem(message)
+    async with state.proxy() as data:
+        data['files'].append((file_id, file_stem))
+
+async def get_photos(message: types.Message, state: FSMContext):
+    photo_id = message.photo[-1].file_id
+    async with state.proxy() as data:
+        data['files'].append((photo_id, '.jpg'))
+
+async def finish_sending_task(message: types.Message, state: FSMContext):
+    # bot = message.bot
+    # async with state.proxy() as data:
+    #     for i, (id, stem) in enumerate(data['files'], 1):
+    #         file_name = f'{data["t_or_v"]}{i}{stem}'
+    #         await bot.download_file_by_id(id, file_name)
+
+    await FSMCreateOrder.next()
+    await ask_to_send_solution(message, state)
+
+async def ask_to_send_solution(message: types.Message, state: FSMContext):
+    await message.answer('Надішліть будь ласка рішення')
+    async with state.proxy() as data:
+        data['solutions'] = {}
+
+async def set_task_num(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['task_num'] = message.text
+        data['solutions'][message.text] = []
+
+async def get_solutions_files(message: types.Message, state: FSMContext):
+    file_id, file_stem = get_file_id_and_stem(message)
+    async with state.proxy() as data:
+        data['solutions'][data['task_num']].append((file_id, file_stem)) 
+
+async def get_solutions_photos(message: types.Message, state: FSMContext):
+    photo_id = message.photo[-1].file_id
+    async with state.proxy() as data:
+        data['solutions'][data['task_num']].append((photo_id, '.jpeg')) 
+
+async def finish_order_creation(message: types.Message, state: FSMContext):
+    print('a')
+    print(await state.get_data())
 
 def handlers_registration(dp: Dispatcher):
-    # dp.register_message_handler(save_files, content_types=['document'])
     dp.register_message_handler(start_creating, filters.Text('Зробити замовлення'))
     dp.register_message_handler(cancel_order, filters.Text('Скасувати замовлення'), state='*')
     dp.register_message_handler(back, filters.Text('Назад'), state='*')
+
     dp.register_callback_query_handler(choose_order_type, type_order_cb_data.filter(), state=FSMCreateOrder.type_order)
     dp.register_callback_query_handler(choose_order_sb, subject_cb_data.filter(), state=FSMCreateOrder.subject)
     dp.register_callback_query_handler(choose_date, calendar_callback.filter(), state=FSMCreateOrder.date)
     dp.register_message_handler(choose_time, filters.Regexp(texts.TIME_REGEX), state=FSMCreateOrder.time)
     dp.register_message_handler(wrong_time, state=FSMCreateOrder.time)
-    dp.register_inline_handler(set_uni_variants,  ListStateFilter(FSMCreateOrder.university), state=FSMCreateOrder.university)
+    dp.register_inline_handler(set_uni_variants, ListStateFilter(FSMCreateOrder.university), state=FSMCreateOrder.university)
     dp.register_message_handler(choose_uni, state=FSMCreateOrder.university)
+    dp.register_message_handler(choose_theeme_or_variant, state=FSMCreateOrder.t_or_v)
+
+    dp.register_message_handler(get_photos, state=FSMCreateOrder.files, content_types=['photo'])
+    dp.register_message_handler(get_files, state=FSMCreateOrder.files, content_types=['document'])
+    dp.register_message_handler(finish_sending_task, filters.Text('Підтвердити'), state=FSMCreateOrder.files)
+
+    dp.register_message_handler(get_solutions_photos, state=FSMCreateOrder.solutions, content_types=['photo'])
+    dp.register_message_handler(get_solutions_files, state=FSMCreateOrder.solutions, content_types=['document'])
+    dp.register_message_handler(finish_order_creation, filters.Text('Підтвердити'), state=FSMCreateOrder.solutions)
+    dp.register_message_handler(set_task_num, state=FSMCreateOrder.solutions)
 
 
