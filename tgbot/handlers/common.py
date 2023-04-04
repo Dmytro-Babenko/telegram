@@ -5,6 +5,7 @@ from aiogram.types.reply_keyboard import ReplyKeyboardRemove
 from tgbot.database.models import Client
 from tgbot.keyboards import reply_kb
 from tgbot.texts import texts
+from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.FSMStates.client_st import FSMRegistration
 from tgbot.middlewares.common_mw import AdminsIDs, contacts
 from tgbot.utils.decor_for_hendlers import need_admin
@@ -45,7 +46,7 @@ async def send_link_to_admin(message: types.Message, admin):
     
 def hendlers_registration(dp: Dispatcher):
     dp.register_message_handler(known_start, commands='start')
-    dp.register_message_handler(registration, content_types='contact', state=FSMRegistration.contact)
+    dp.register_message_handler(registration,content_types='contact', state=FSMRegistration.contact)
     dp.register_message_handler(send_link_to_admin, filters.Text(equals='Написати адміну'))
     # dp.register_message_handler(no_command)
     

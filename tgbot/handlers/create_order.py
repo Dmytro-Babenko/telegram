@@ -8,6 +8,7 @@ from aiogram.types.reply_keyboard import ReplyKeyboardRemove
 
 from tgbot.database.models import Client
 from tgbot.database.data import universities
+from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.keyboards import reply_kb, inline_kb
 from tgbot.keyboards.tg_calendar import TgCalendar, calendar_callback
 from tgbot.texts import texts
@@ -107,15 +108,16 @@ async def choose_uni(message:types.Message, state:FSMContext):
 async def ask_to_send_files(message:types.Message, *args):
     await message.answer('Відправте файли')
 
-async def set_uni_variants(query:types.InlineQuery):
-    text = query.query or 'test'
+async def set_uni_variants(query:types.InlineQuery, variants:list):
+
+    text = query.query or ''
     text = text.lower()
 
     items = [InlineQueryResultArticle(
-        input_message_content=InputTextMessageContent(university),
+        input_message_content=InputTextMessageContent(element),
         id=i,
-        title=university
-    ) for i, university in enumerate(universities) if text in university.lower()]
+        title=element
+    ) for i, element in enumerate(variants) if text in element.lower()]
 
     if not items:
         items = [InlineQueryResultArticle(
@@ -123,20 +125,38 @@ async def set_uni_variants(query:types.InlineQuery):
             id = 0,
             title=text
         )]
-    await query.answer(results=items, cache_time=1, is_personal=True)
+
+    await query.answer(results=items[:49], cache_time=1, is_personal=True)
+
+async def save_files(message: types.Message):
+    # finish_message_id = message.message_id
+    # chat_id = message.chat.id
+    print(message)
+    file_id = message.document.file_id
+    file_name = message.document.file_name
+    bot = message.bot
+    await bot.download_file_by_id(file_id=file_id, destination=file_name)
+    await message.answer('Done')
+    # bot
+    # print(type(message.chat.ge))  
+    # a = types.Message(message_id=finish_message_id,
+    #             # date=datetime.datetime.now(),
+    #             chat=types.Chat(id=chat_id, type="private"))
+    # print(a.text, message.text)
+
+    #сохранняем на последнем єтапе, скасувати - очищает список, словарь, номер файла(длина словаря)
 
 def handlers_registration(dp: Dispatcher):
+    # dp.register_message_handler(save_files, content_types=['document'])
     dp.register_message_handler(start_creating, filters.Text('Зробити замовлення'))
     dp.register_message_handler(cancel_order, filters.Text('Скасувати замовлення'), state='*')
     dp.register_message_handler(back, filters.Text('Назад'), state='*')
-    dp.register_callback_query_handler(choose_order_type, type_order_cb_data.filter(),state=FSMCreateOrder.type_order)
+    dp.register_callback_query_handler(choose_order_type, type_order_cb_data.filter(), state=FSMCreateOrder.type_order)
     dp.register_callback_query_handler(choose_order_sb, subject_cb_data.filter(), state=FSMCreateOrder.subject)
     dp.register_callback_query_handler(choose_date, calendar_callback.filter(), state=FSMCreateOrder.date)
     dp.register_message_handler(choose_time, filters.Regexp(texts.TIME_REGEX), state=FSMCreateOrder.time)
     dp.register_message_handler(wrong_time, state=FSMCreateOrder.time)
-    dp.register_inline_handler(set_uni_variants, state=FSMCreateOrder.university)
+    dp.register_inline_handler(set_uni_variants,  ListStateFilter(FSMCreateOrder.university), state=FSMCreateOrder.university)
     dp.register_message_handler(choose_uni, state=FSMCreateOrder.university)
-
-
 
 

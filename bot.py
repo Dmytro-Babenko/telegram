@@ -7,7 +7,7 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from tgbot import config
 from tgbot.handlers import common, create_order
 from tgbot.middlewares.common_mw import RegistrationUsers, AdminsIDs, CallbackQueryAnswer
-# from tgbot.filters.create_order_filters import IsRightButton
+from tgbot.filters.create_order_filters import ListStateFilter
 
 def register_middlewares(dp: Dispatcher):
     dp.setup_middleware(RegistrationUsers())
@@ -16,7 +16,7 @@ def register_middlewares(dp: Dispatcher):
     pass
 
 def register_filters(dp: Dispatcher):
-    dp.bind_filter(...)
+    dp.bind_filter(ListStateFilter)
     pass
 
 def register_handlers(dp: Dispatcher):
@@ -30,11 +30,11 @@ def main():
     bot['config'] = cg
     dp = Dispatcher(bot ,storage=MemoryStorage())
     register_middlewares(dp)
+    register_filters(dp)
     register_handlers(dp)
     return dp
 
 if __name__ == '__main__':
     dp = main()
     executor.start_polling(dp, skip_updates=True)
-
 # использовать мидлварь чтобы передавать списки поиска в инлайн либо по стейту
