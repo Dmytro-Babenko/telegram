@@ -103,9 +103,6 @@ async def choose_uni(message:types.Message, state:FSMContext):
     else:
         await message.answer('Скористайтесь кнопкою пошук')
 
-async def ask_to_choose_theeme_var(message:types.Message, *args):
-    await message.answer('Напишіть тему')
-
 async def set_uni_variants(query:types.InlineQuery, variants:list):
 
     text = query.query or ''
@@ -125,6 +122,9 @@ async def set_uni_variants(query:types.InlineQuery, variants:list):
         )]
 
     await query.answer(results=items[:49], cache_time=1, is_personal=True)
+
+async def ask_to_choose_theeme_var(message:types.Message, *args):
+    await message.answer('Напишіть тему')
 
 async def choose_theeme_or_variant(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -178,6 +178,9 @@ async def finish_order_creation(message: types.Message, state: FSMContext):
     print('a')
     print(await state.get_data())
 
+async def no_command(update: types.Message|types.CallbackQuery):
+    await update.answer('Неправильна команда, користуйтеся підсказками бота')
+
 def handlers_registration(dp: Dispatcher):
     dp.register_message_handler(start_creating, filters.Text('Зробити замовлення'))
     dp.register_message_handler(cancel_order, filters.Text('Скасувати замовлення'), state='*')
@@ -196,6 +199,14 @@ def handlers_registration(dp: Dispatcher):
     dp.register_message_handler(get_files, state=[FSMCreateOrder.files, FSMCreateOrder.solutions], content_types=['document', 'photo'])
     dp.register_message_handler(cancel_task_sending, filters.Text('Скасувати відправку файлів'), state=[FSMCreateOrder.files, FSMCreateOrder.solutions])
     dp.register_message_handler(finish_order_creation, filters.Text('Підтвердити'), state=FSMCreateOrder.solutions)
-    dp.register_message_handler(set_task_num, state=FSMCreateOrder.solutions)
+    dp.register_message_handler(set_task_num, state=FSMCreateOrder.solutions, regexp='\w{1,3}')
+
+    dp.register_callback_query_handler(no_command, state='*')
+    dp.register_message_handler(no_command, state='*')
+
+
+
+
+
 
 

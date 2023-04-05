@@ -31,7 +31,7 @@ class AdminsIDs(BaseMiddleware):
             data['admin'] = admins[0]['username']
 
 class CallbackQueryAnswer(BaseMiddleware):
-    async def on_pre_process_callback_query(self, cq:types.CallbackQuery, data:dict):
+    async def on_post_process_callback_query(self, cq:types.CallbackQuery, data_from_filter:list, data:dict):
         await cq.answer()
 
     
