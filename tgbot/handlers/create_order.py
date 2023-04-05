@@ -1,20 +1,15 @@
 from collections import defaultdict
 from datetime import date, datetime
-import hashlib
 
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import filters, FSMContext
 from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
-from aiogram.types.reply_keyboard import ReplyKeyboardRemove
 
-from tgbot.database.models import Client
-from tgbot.database.data import universities
 from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.keyboards import reply_kb, inline_kb
 from tgbot.keyboards.tg_calendar import TgCalendar, calendar_callback
 from tgbot.texts import texts
 from tgbot.FSMStates.client_st import FSMCreateOrder
-from tgbot.middlewares.common_mw import AdminsIDs, contacts
 from tgbot.utils.callback_data import subject_cb_data, type_order_cb_data
 from tgbot.utils.helpers_for_hendlers import get_file_id_and_stem, delete_state_value
 
@@ -142,20 +137,14 @@ async def ask_to_send_files(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['files'] = []
 
-def get_file_id_and_stem(message: types.Message):
-    file_id = message.document.file_id
-    file_stem = f'.{message.document.file_name.split(".")[-1]}'
-    return file_id, file_stem
-
 async def get_files(message: types.Message, state: FSMContext):
-    file_id, file_stem = get_file_id_and_stem(message)
+    id_and_stem = (message.photo[-1].file_id, '.jpg') if message.photo else get_file_id_and_stem(message)
     async with state.proxy() as data:
-        data['files'].append((file_id, file_stem))
-
-async def get_photos(message: types.Message, state: FSMContext):
-    photo_id = message.photo[-1].file_id
-    async with state.proxy() as data:
-        data['files'].append((photo_id, '.jpg'))
+        if data.get('solutions') != None:
+            file_sub_group = data.get('task_num', '')
+            data['solutions'][file_sub_group].append(id_and_stem)
+        else:
+            data['files'].append(id_and_stem)
 
 async def finish_sending_task(message: types.Message, state: FSMContext):
     # bot = message.bot
@@ -170,31 +159,20 @@ async def finish_sending_task(message: types.Message, state: FSMContext):
 async def ask_to_send_solution(message: types.Message, state: FSMContext):
     await message.answer('Надішліть будь ласка рішення')
     async with state.proxy() as data:
-        data['task_num'] = ''
         data['solutions'] = defaultdict(list)
 
 async def set_task_num(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['task_num'] = message.text
-        # data['solutions'][message.text] = []
-
-async def get_solutions_files(message: types.Message, state: FSMContext):
-    file_id, file_stem = get_file_id_and_stem(message)
-    async with state.proxy() as data:
-        data['solutions'][data['task_num']].append((file_id, file_stem)) 
-
-async def get_solutions_photos(message: types.Message, state: FSMContext):
-    photo_id = message.photo[-1].file_id
-    async with state.proxy() as data:
-        data['solutions'][data['task_num']].append((photo_id, '.jpeg')) 
 
 async def cancel_task_sending(message: types.Message, state: FSMContext):
     await delete_state_value(state)
-    await ask_to_send_files(message, state)
-
-async def cancel_solution_sending(message: types.Message, state: FSMContext):
-    await delete_state_value(state)
-    await ask_to_send_solution(message, state)
+    async with state.proxy() as data:    
+        wait_solution = True if data.get('files') != None else False
+    if wait_solution:
+        await ask_to_send_solution(message, state)
+    else:
+        await ask_to_send_files(message, state)
     
 async def finish_order_creation(message: types.Message, state: FSMContext):
     print('a')
@@ -214,15 +192,10 @@ def handlers_registration(dp: Dispatcher):
     dp.register_message_handler(choose_uni, state=FSMCreateOrder.university)
     dp.register_message_handler(choose_theeme_or_variant, state=FSMCreateOrder.t_or_v)
 
-    dp.register_message_handler(get_photos, state=FSMCreateOrder.files, content_types=['photo'])
-    dp.register_message_handler(get_files, state=FSMCreateOrder.files, content_types=['document'])
     dp.register_message_handler(finish_sending_task, filters.Text('Підтвердити'), state=FSMCreateOrder.files)
-    dp.register_message_handler(cancel_task_sending, filters.Text('Скасувати відправку файлів'), state=FSMCreateOrder.files)
-
-    dp.register_message_handler(get_solutions_photos, state=FSMCreateOrder.solutions, content_types=['photo'])
-    dp.register_message_handler(get_solutions_files, state=FSMCreateOrder.solutions, content_types=['document'])
+    dp.register_message_handler(get_files, state=[FSMCreateOrder.files, FSMCreateOrder.solutions], content_types=['document', 'photo'])
+    dp.register_message_handler(cancel_task_sending, filters.Text('Скасувати відправку файлів'), state=[FSMCreateOrder.files, FSMCreateOrder.solutions])
     dp.register_message_handler(finish_order_creation, filters.Text('Підтвердити'), state=FSMCreateOrder.solutions)
-    dp.register_message_handler(cancel_solution_sending, filters.Text('Скасувати відправку файлів'), state=FSMCreateOrder.solutions)
     dp.register_message_handler(set_task_num, state=FSMCreateOrder.solutions)
 
 
