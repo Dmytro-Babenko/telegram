@@ -8,7 +8,7 @@ from tgbot.texts import texts
 from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.FSMStates.client_st import FSMRegistration
 from tgbot.middlewares.common_mw import AdminsIDs, contacts
-from tgbot.utils.decor_for_hendlers import need_admin
+from tgbot.utils.helpers_for_hendlers import need_admin
 
 def get_full_name(first_name, last_name):
     return f'{first_name} {last_name}' if last_name else first_name
