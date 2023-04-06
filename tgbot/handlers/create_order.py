@@ -1,9 +1,10 @@
 from collections import defaultdict
 from datetime import date, datetime
+from functools import reduce
 
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import filters, FSMContext
-from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
+from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InputMediaPhoto, InputMediaDocument, MediaGroup
 
 from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.keyboards import reply_kb, inline_kb
@@ -160,6 +161,7 @@ async def ask_to_send_solution(message: types.Message, state: FSMContext):
     await message.answer('Надішліть будь ласка рішення')
     async with state.proxy() as data:
         data['solutions'] = defaultdict(list)
+        data['task_num'] = ''
 
 async def set_task_num(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -173,10 +175,34 @@ async def cancel_task_sending(message: types.Message, state: FSMContext):
         await ask_to_send_solution(message, state)
     else:
         await ask_to_send_files(message, state)
+
+async def files_sending(message: types.Message, files_list:list[tuple]):
+    media_group = MediaGroup()
+    previous_ext = None
+    for i, (id_, ext) in enumerate(files_list):
+        if ext == '.jpg':
+            file_inp_obj = InputMediaPhoto(media=id_)
+        else:
+            file_inp_obj = InputMediaDocument(media=id_)
+
+        if i > 0 and ((ext == '.jpg') ^ (previous_ext == '.jpg')):
+            await message.answer_media_group(media_group)
+            media_group.media = []
+
+        media_group.attach(file_inp_obj)
+        previous_ext = ext
+    await message.answer_media_group(media_group)
     
 async def finish_order_creation(message: types.Message, state: FSMContext):
-    print('a')
-    print(await state.get_data())
+    data = await state.get_data()
+    order_description = '\n'.join((f'{x}: {y}' for x, y in data.items()))
+    task_files = data['files']
+    solution_files:defaultdict = data['solutions']
+    await message.answer(order_description)
+    await files_sending(message, task_files)
+    for num, files in solution_files.items():
+        await message.answer(num)
+        await files_sending(message, files)
 
 async def no_command(update: types.Message|types.CallbackQuery):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')
