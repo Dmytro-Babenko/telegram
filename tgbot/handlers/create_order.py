@@ -6,13 +6,14 @@ from aiogram import Dispatcher, types
 from aiogram.dispatcher import filters, FSMContext
 from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InputMediaPhoto, InputMediaDocument, MediaGroup
 
+from tgbot.database import models
 from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.keyboards import reply_kb, inline_kb
 from tgbot.keyboards.tg_calendar import TgCalendar, calendar_callback
 from tgbot.texts import texts
 from tgbot.FSMStates.client_st import FSMCreateOrder
 from tgbot.utils.callback_data import subject_cb_data, type_order_cb_data
-from tgbot.utils.helpers_for_hendlers import get_file_id_and_stem, delete_state_value
+from tgbot.utils.helpers_for_hendlers import get_file_id_and_ext, delete_state_value
 
 async def back(message: types.Message, state: FSMContext):
 
@@ -136,16 +137,21 @@ async def choose_theeme_or_variant(message: types.Message, state: FSMContext):
 async def ask_to_send_files(message:types.Message, state: FSMContext):
     await message.answer('Відправте файли', reply_markup=reply_kb.make_create_order_kb(confirm=True, cancel_files=True))
     async with state.proxy() as data:
-        data['files'] = []
+        data['files'] = models.Files()
 
 async def get_files(message: types.Message, state: FSMContext):
-    id_and_stem = (message.photo[-1].file_id, '.jpg') if message.photo else get_file_id_and_stem(message)
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        file = models.UserPhoto(file_id)
+    else:
+        id_and_ext = get_file_id_and_ext(message)
+        file = models.UserDoc(*id_and_ext)
     async with state.proxy() as data:
         if data.get('solutions') != None:
             file_sub_group = data.get('task_num', '')
-            data['solutions'][file_sub_group].append(id_and_stem)
+            data['solutions'][file_sub_group].add_file(file)
         else:
-            data['files'].append(id_and_stem)
+            data['files'].add_file(file)
 
 async def finish_sending_task(message: types.Message, state: FSMContext):
     # bot = message.bot
@@ -160,7 +166,7 @@ async def finish_sending_task(message: types.Message, state: FSMContext):
 async def ask_to_send_solution(message: types.Message, state: FSMContext):
     await message.answer('Надішліть будь ласка рішення')
     async with state.proxy() as data:
-        data['solutions'] = defaultdict(list)
+        data['solutions'] = defaultdict(models.Files)
         data['task_num'] = ''
 
 async def set_task_num(message: types.Message, state: FSMContext):
@@ -196,13 +202,22 @@ async def files_sending(message: types.Message, files_list:list[tuple]):
 async def finish_order_creation(message: types.Message, state: FSMContext):
     data = await state.get_data()
     order_description = '\n'.join((f'{x}: {y}' for x, y in data.items()))
-    task_files = data['files']
+    task_files:models.Files = data['files']
     solution_files:defaultdict = data['solutions']
     await message.answer(order_description)
-    await files_sending(message, task_files)
+    # print(task_files.media_groups)
+    for media_group in task_files.media_groups:
+        await message.answer_media_group(media_group)
+
     for num, files in solution_files.items():
         await message.answer(num)
-        await files_sending(message, files)
+        for media_group in files.media_groups:
+            await message.answer_media_group(media_group)
+    
+    # await message.answer_media_group(task_files.media_groups)
+    # for num, files in solution_files.items():
+    #     await message.answer(num)
+    #     await files_sending(message, files)
 
 async def no_command(update: types.Message|types.CallbackQuery):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')

@@ -7,7 +7,7 @@ def need_admin():
         return func
     return decorator
 
-def get_file_id_and_stem(message: types.Message):
+def get_file_id_and_ext(message: types.Message) -> tuple[str, str]:
     file_id = message.document.file_id
     file_stem = f'.{message.document.file_name.split(".")[-1]}'
     return file_id, file_stem

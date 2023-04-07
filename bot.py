@@ -38,3 +38,20 @@ if __name__ == '__main__':
     dp = main()
     executor.start_polling(dp, skip_updates=True)
 # использовать мидлварь чтобы передавать списки поиска в инлайн либо по стейту
+
+
+# document1 ='document1'
+# photo1 = 'photo1'
+# document2 = 'document2'
+
+# file_list = []
+
+# file_list.append(document1)
+# file_list.append(photo1)
+# file_list.append(document2)
+
+# file_list = ['document1', 'photo1', 'document2']
+# file_structure = {'docs': ['document1', 'document2'],
+#                   'photo': ['photo1']}
+
+# print(file_list)
