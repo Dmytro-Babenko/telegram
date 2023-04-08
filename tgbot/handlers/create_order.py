@@ -1,6 +1,6 @@
 from collections import defaultdict
 from datetime import date, datetime
-from functools import reduce
+import re
 
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import filters, FSMContext
@@ -139,19 +139,41 @@ async def ask_to_send_files(message:types.Message, state: FSMContext):
     async with state.proxy() as data:
         data['files'] = models.Files()
 
+async def ask_to_send_solution(message: types.Message, state: FSMContext):
+    await message.answer('Надішліть будь ласка рішення')
+    async with state.proxy() as data:
+        data['solutions'] = defaultdict(models.Files)
+        data['task_num'] = ''
+
 async def get_files(message: types.Message, state: FSMContext):
     if message.photo:
         file_id = message.photo[-1].file_id
-        file = models.UserPhoto(file_id)
+        file = models.PhotoElement(media=file_id)
     else:
-        id_and_ext = get_file_id_and_ext(message)
-        file = models.UserDoc(*id_and_ext)
+        file_id, ext = get_file_id_and_ext(message)
+        file = models.DocElement(media=file_id, extension=ext)
     async with state.proxy() as data:
         if data.get('solutions') != None:
             file_sub_group = data.get('task_num', '')
-            data['solutions'][file_sub_group].add_file(file)
+            files:models.Files = data['solutions'][file_sub_group]
+        else:
+            files:models.Files = data['files']
+        files.add_element(file)
+
+async def get_text_element(message: types.Message, state: FSMContext):
+    text = message.text
+    task_num_match = re.search(r'\b\d+\b', text)
+    task_num = task_num_match.group() if task_num_match else None
+    file = models.TextElement(text)
+    async with state.proxy() as data:
+        if data.get('solutions') != None:
+            if task_num:
+                data['task_num'] = task_num
+            file_sub_group = data.get('task_num', '')
+            files:models.Files = data['solutions'][file_sub_group]
         else:
             data['files'].add_file(file)
+        files.add_element(file)
 
 async def finish_sending_task(message: types.Message, state: FSMContext):
     # bot = message.bot
@@ -162,12 +184,6 @@ async def finish_sending_task(message: types.Message, state: FSMContext):
 
     await FSMCreateOrder.next()
     await ask_to_send_solution(message, state)
-
-async def ask_to_send_solution(message: types.Message, state: FSMContext):
-    await message.answer('Надішліть будь ласка рішення')
-    async with state.proxy() as data:
-        data['solutions'] = defaultdict(models.Files)
-        data['task_num'] = ''
 
 async def set_task_num(message: types.Message, state: FSMContext):
     async with state.proxy() as data:
@@ -181,43 +197,21 @@ async def cancel_task_sending(message: types.Message, state: FSMContext):
         await ask_to_send_solution(message, state)
     else:
         await ask_to_send_files(message, state)
-
-async def files_sending(message: types.Message, files_list:list[tuple]):
-    media_group = MediaGroup()
-    previous_ext = None
-    for i, (id_, ext) in enumerate(files_list):
-        if ext == '.jpg':
-            file_inp_obj = InputMediaPhoto(media=id_)
-        else:
-            file_inp_obj = InputMediaDocument(media=id_)
-
-        if i > 0 and ((ext == '.jpg') ^ (previous_ext == '.jpg')):
-            await message.answer_media_group(media_group)
-            media_group.media = []
-
-        media_group.attach(file_inp_obj)
-        previous_ext = ext
-    await message.answer_media_group(media_group)
     
 async def finish_order_creation(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    order_description = '\n'.join((f'{x}: {y}' for x, y in data.items()))
-    task_files:models.Files = data['files']
-    solution_files:defaultdict = data['solutions']
+    order_description = '\n'.join((f'{x}: {y}' for x, y in data.items() if x not in ['files', 'solutions']))
+    task_files: models.Files = data['files']
+    solution_files: defaultdict[str:models.Files] = data['solutions']
     await message.answer(order_description)
-    # print(task_files.media_groups)
-    for media_group in task_files.media_groups:
-        await message.answer_media_group(media_group)
-
-    for num, files in solution_files.items():
-        await message.answer(num)
-        for media_group in files.media_groups:
-            await message.answer_media_group(media_group)
+    await task_files.answer_files(message)
     
-    # await message.answer_media_group(task_files.media_groups)
-    # for num, files in solution_files.items():
-    #     await message.answer(num)
-    #     await files_sending(message, files)
+    for num, files in solution_files.items():
+        if num:
+            await message.answer(num)
+        await files.answer_files(message)
+        # for media_group in files:
+        #     await message.answer_media_group(media_group)
 
 async def no_command(update: types.Message|types.CallbackQuery):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')
@@ -240,7 +234,8 @@ def handlers_registration(dp: Dispatcher):
     dp.register_message_handler(get_files, state=[FSMCreateOrder.files, FSMCreateOrder.solutions], content_types=['document', 'photo'])
     dp.register_message_handler(cancel_task_sending, filters.Text('Скасувати відправку файлів'), state=[FSMCreateOrder.files, FSMCreateOrder.solutions])
     dp.register_message_handler(finish_order_creation, filters.Text('Підтвердити'), state=FSMCreateOrder.solutions)
-    dp.register_message_handler(set_task_num, state=FSMCreateOrder.solutions, regexp='\w{1,3}')
+    dp.register_message_handler(get_text_element, state=FSMCreateOrder.solutions, regexp=r'.{20,}')
+    dp.register_message_handler(set_task_num, state=FSMCreateOrder.solutions, regexp=r'^\w{1,3}$')
 
     dp.register_callback_query_handler(no_command, state='*')
     dp.register_message_handler(no_command, state='*')

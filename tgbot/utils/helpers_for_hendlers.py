@@ -19,4 +19,6 @@ async def delete_state_value(state: FSMContext):
             async with state.proxy() as data:
                 if data.get(state_short_name) != None:
                     data.pop(state_short_name)
+
+
             
