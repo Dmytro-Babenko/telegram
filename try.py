@@ -1,5 +1,6 @@
-from collections import UserString
+from datetime import date, time, datetime
 
-a = UserString('213113')
-b = UserString('sdadddd')
-print(UserString(' ').join(['a', 'b']))
+d = date(2022, 3, 2)
+t = time(10, 10)
+a = datetime.combine(d, t)
+print(a)

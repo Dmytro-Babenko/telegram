@@ -11,7 +11,7 @@ class FSMCreateOrder(StatesGroup):
     time = State()
     university = State()
     t_or_v = State()
-    files = State()
+    task_files = State()
     solutions = State()
     last = State()
 

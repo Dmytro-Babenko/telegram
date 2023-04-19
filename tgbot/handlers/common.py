@@ -7,7 +7,7 @@ from tgbot.keyboards import reply_kb
 from tgbot.texts import texts
 from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.FSMStates.client_st import FSMRegistration
-from tgbot.middlewares.common_mw import AdminsIDs, contacts
+from tgbot.middlewares.common_mw import AdminsIDs
 from tgbot.utils.helpers_for_hendlers import need_admin
 
 def get_full_name(first_name, last_name):
@@ -28,7 +28,8 @@ async def registration(message:types.Message, state:FSMContext):
             message.from_user.username,
             message.contact.phone_number
         )
-        contacts[client.id] = client
+        client.insert_to_db()
+        # contacts[client.id] = client
         name = get_full_name(client.first_name, client.last_name)
         await message.answer(f'{name}, Вас зареєстровано успішно', reply_markup=reply_kb.make_main_kb())
         await state.finish()
