@@ -1,8 +1,10 @@
-from aiogram import Router, types, F
-from aiogram.filters import Command
-from aiogram.filters.text import Text
+from aiogram import Dispatcher, types
 
-router = Router()
+from tgbot.filters.admin_filters import IsAdmin
 
-# @router.message(Command('start'))
-# async def admin_start(message: types.Message):
+async def start_admin_panel(message: types.Message):
+    await message.answer('Адмін')
+
+def hendler_registration(dp: Dispatcher):
+    dp.register_message_handler(start_admin_panel, IsAdmin(), commands='admin')
+    pass

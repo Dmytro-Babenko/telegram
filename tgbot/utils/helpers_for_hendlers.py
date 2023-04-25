@@ -29,9 +29,7 @@ def define_text_material(message: types.Message, need_task_num = False):
     text = message.text
     file = models.TextElement(text)
     if need_task_num:
-        print(text)
         task_num_match = re.search(r'^\d{1,3}\b', text)
-        print(task_num_match)
         task_num = task_num_match.group() if task_num_match else None
         return file, task_num
     return file

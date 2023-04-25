@@ -16,10 +16,9 @@ class RegistrationUsers(BaseMiddleware):
     #     print(update)
 
     async def on_pre_process_message(self, message: types.Message, data: dict):
-        # print(message)
+        print(message)
         client_id = message.from_user.id
         contacts = Client.get_all_ids()
-        print(contacts)
         if client_id not in contacts and not message.contact:
             await FSMRegistration.contact.set()
             kb = make_registration_kb()

@@ -5,6 +5,7 @@ class FSMRegistration(StatesGroup):
     contact = State()
 
 class FSMCreateOrder(StatesGroup):
+    client = State()
     type_order = State()
     subject = State()
     date = State()

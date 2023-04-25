@@ -4,10 +4,10 @@ import re
 
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import filters, FSMContext
-from aiogram.types import InlineQueryResultArticle, InputTextMessageContent, InputMediaPhoto, InputMediaDocument, MediaGroup
+from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
 
 from tgbot.database import models
-from tgbot.filters.create_order_filters import ListStateFilter
+from tgbot.filters.create_order_filters import ListStateFilter, IsAdmin
 from tgbot.keyboards import reply_kb, inline_kb
 from tgbot.keyboards.tg_calendar import TgCalendar, calendar_callback
 from tgbot.texts import texts
@@ -18,7 +18,7 @@ from tgbot.utils.helpers_for_hendlers import delete_state_value, put_sollution_t
 async def back(message: types.Message, state: FSMContext):
 
     HENDLERS = (
-        cancel_order, start_creating, ask_to_choose_sb, 
+        cancel_order, ask_to_choose_type, ask_to_choose_sb, 
         ask_to_choose_date, ask_to_choose_time, ask_to_choose_uni,
         ask_to_choose_theeme_var, ask_to_send_files, ask_to_send_solution
         )
@@ -39,11 +39,42 @@ async def cancel_order(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer('Оформлення замовлення скасовано', reply_markup=reply_kb.make_main_kb())
 
-async def start_creating(message:types.Message, *args):
-    await FSMCreateOrder.type_order.set()
-    inl_kb = await inline_kb.make_choose_kb('type_order')
+async def send_create_kb(message: types.Message):
     create_kb = reply_kb.make_create_order_kb()
     await message.answer('Ви в меню створення замовлень, користуйтесь підсказками', reply_markup=create_kb)
+
+async def start_creating(message:types.Message, state: FSMContext):
+    await FSMCreateOrder.type_order.set()
+    await send_create_kb(message)
+    await ask_to_choose_type(message)
+    client = models.Client.select_from_db(message.from_user.id)
+    async with state.proxy() as data:
+        data['client'] = client
+
+async def start_admin_creating(message: types.Message, *args):
+    await FSMCreateOrder.client.set()
+    await send_create_kb(message)
+    await message.answer('Перещліть повідомлення від клієнта')
+
+async def set_client(message: types.Message, state: FSMContext):
+    client_id = message.forward_from.id
+    if client_id in models.Client.get_all_ids():
+        client = models.Client.select_from_db(client_id)
+    else:
+        first_name = message.forward_from.first_name
+        last_name = message.forward_from.last_name
+        user_name = message.forward_from.username
+        client = models.Client(client_id, first_name, last_name, user_name)
+        client.insert_to_db()
+
+    async with state.proxy() as data:
+        data['client'] = client
+    
+    await FSMCreateOrder.next()
+    await ask_to_choose_type(message)
+
+async def ask_to_choose_type(message: types.Message, *args):
+    inl_kb = await inline_kb.make_choose_kb('type_order')
     await message.answer('Оберіть тип роботи будь ласка', reply_markup=inl_kb)
 
 async def ask_to_choose_sb(message:types.Message, *args):
@@ -113,6 +144,7 @@ async def set_uni_variants(query:types.InlineQuery, variants:list):
     text = query.query or ''
     text = text.lower()
 
+# 3 етапа
     items = [InlineQueryResultArticle(
         input_message_content=InputTextMessageContent(element),
         id=i,
@@ -164,7 +196,7 @@ async def get_solution_files(message: types.Message, state: FSMContext):
 async def get_text_task(message: types.Message, state: FSMContext):
     file = define_text_material(message)
     async with state.proxy() as data:
-        files: data['task_files']
+        files: models.Files = data['task_files']
         files.add_element(file)
 
 async def get_text_solution(message: types.Message, state: FSMContext):
@@ -196,30 +228,30 @@ async def cancel_solution_sending(message: types.Message, state: FSMContext):
     
 async def finish_order_creation(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    order = models.Order(message.from_user.id, **data)
+    order = models.Order(**data)
     order_description = order.form_description()
     task_files: models.Files = data['task_files']
     solution_files: models.Solutions[str:models.Files] = data['solutions']
-    print(solution_files)
     await message.answer(order_description)
     await task_files.answer_files(message)
-    
-    for num, files in solution_files.items():
-        if num:
-            await message.answer(num)
-        await files.answer_files(message)
-
+    await solution_files.answer_solutions(message)
     order.insert_to_db()
-        # for media_group in files:
-        #     await message.answer_media_group(media_group)
 
 async def no_command(update: types.Message|types.CallbackQuery):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')
 
+async def no_state(message: types.Message):
+    main_kb = reply_kb.make_main_kb()
+    await message.answer('Скористайтесь меню', reply_markup=main_kb)
+
 def handlers_registration(dp: Dispatcher):
-    dp.register_message_handler(start_creating, filters.Text('Зробити замовлення'))
+
     dp.register_message_handler(cancel_order, filters.Text('Скасувати замовлення'), state='*')
     dp.register_message_handler(back, filters.Text('Назад'), state='*')
+
+    dp.register_message_handler(start_admin_creating, IsAdmin(), filters.Text('Зробити замовлення'))
+    dp.register_message_handler(start_creating, filters.Text('Зробити замовлення'))
+    dp.register_message_handler(set_client, filters.ForwardedMessageFilter(True), state=FSMCreateOrder.client)
 
     dp.register_callback_query_handler(choose_order_type, type_order_cb_data.filter(), state=FSMCreateOrder.type_order)
     dp.register_callback_query_handler(choose_order_sb, subject_cb_data.filter(), state=FSMCreateOrder.subject)
@@ -241,6 +273,7 @@ def handlers_registration(dp: Dispatcher):
     dp.register_message_handler(get_text_solution, state=FSMCreateOrder.solutions, regexp=r'.{20,}') 
     dp.register_message_handler(get_solution_files, state=[FSMCreateOrder.solutions], content_types=['document', 'photo'])
 
+    dp.register_message_handler(no_state, state=None)
     dp.register_callback_query_handler(no_command, state='*')
     dp.register_message_handler(no_command, state='*')
 

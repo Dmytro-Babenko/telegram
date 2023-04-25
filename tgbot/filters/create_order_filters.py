@@ -4,6 +4,7 @@ from aiogram.dispatcher import FSMContext
 
 from tgbot.keyboards.inline_kb import BUTTONS
 from tgbot.FSMStates.client_st import FSMCreateOrder
+from tgbot.database import models
 from tgbot.database.data import universities
 
 
@@ -20,10 +21,13 @@ class ListStateFilter(BoundFilter):
         category_lst = self.CATRGORIES.get(self.state, False)
         if category_lst:
             return {'variants': category_lst}
-        return category_lst
+        return False
     
+class IsAdmin(BoundFilter):
+    def __init__(self) -> None:
+        super().__init__()
 
+    async def check(self, obj):
+        client_id = obj.from_user.id
+        return client_id in models.Admin.get_all_ids()
 
-
-a = [1, 2]
-print(a[:100])

@@ -5,9 +5,9 @@ from aiogram import Dispatcher, Bot, types, executor
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 from tgbot import config
-from tgbot.handlers import common, create_order
+from tgbot.handlers import common, create_order, admin
 from tgbot.middlewares.common_mw import RegistrationUsers, AdminsIDs, CallbackQueryAnswer
-from tgbot.filters.create_order_filters import ListStateFilter
+from tgbot.filters.create_order_filters import ListStateFilter, IsAdmin
 
 def register_middlewares(dp: Dispatcher):
     dp.setup_middleware(RegistrationUsers())
@@ -17,10 +17,12 @@ def register_middlewares(dp: Dispatcher):
 
 def register_filters(dp: Dispatcher):
     dp.bind_filter(ListStateFilter)
+    dp.bind_filter(IsAdmin)
     pass
 
 def register_handlers(dp: Dispatcher):
     common.hendlers_registration(dp)
+    admin.hendler_registration(dp)
     create_order.handlers_registration(dp)
     pass
 
@@ -37,4 +39,4 @@ def main():
 if __name__ == '__main__':
     dp = main()
     executor.start_polling(dp, skip_updates=True)
-# использовать мидлварь чтобы передавать списки поиска в инлайн либо по стейту
+# университеты, предметы и преподы по умолчанию, возможно хранить в базу данных

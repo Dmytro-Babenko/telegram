@@ -1,6 +1,8 @@
 from datetime import date, time, datetime
 
-d = date(2022, 3, 2)
-t = time(10, 10)
-a = datetime.combine(d, t)
-print(a)
+a = {1: 2}
+b = {2:1}
+c = {3: 4}
+
+dct = {**a, **b, **c}
+print(dct)
