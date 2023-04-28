@@ -6,7 +6,7 @@ from aiogram.dispatcher.middlewares import BaseMiddleware, LifetimeControllerMid
 
 from tgbot.keyboards.reply_kb import make_registration_kb
 from tgbot.FSMStates.client_st import FSMRegistration
-from tgbot.database.models import Client
+from tgbot.database.models import Client, Loader, DB_FILE
 
 admins = [{'username': 'Dmitriy_babenko87'}]
 # contacts = {}
@@ -16,9 +16,8 @@ class RegistrationUsers(BaseMiddleware):
     #     print(update)
 
     async def on_pre_process_message(self, message: types.Message, data: dict):
-        print(message)
         client_id = message.from_user.id
-        contacts = Client.get_all_ids()
+        contacts = Loader.load_all(Client)
         if client_id not in contacts and not message.contact:
             await FSMRegistration.contact.set()
             kb = make_registration_kb()

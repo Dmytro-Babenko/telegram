@@ -8,4 +8,4 @@ class IsAdmin(BoundFilter):
 
     async def check(self, obj):
         client_id = obj.from_user.id
-        return client_id in models.Admin.get_all_ids()
+        return client_id in models.Loader.load_all(models.Admin)

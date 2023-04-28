@@ -1,4 +1,3 @@
-from collections import defaultdict
 from datetime import date, datetime
 import re
 
@@ -18,7 +17,7 @@ from tgbot.utils.helpers_for_hendlers import delete_state_value, put_sollution_t
 async def back(message: types.Message, state: FSMContext):
 
     HENDLERS = (
-        cancel_order, ask_to_choose_type, ask_to_choose_sb, 
+        cancel_order, cancel_order, ask_to_choose_type, ask_to_choose_sb, 
         ask_to_choose_date, ask_to_choose_time, ask_to_choose_uni,
         ask_to_choose_theeme_var, ask_to_send_files, ask_to_send_solution
         )
@@ -47,7 +46,7 @@ async def start_creating(message:types.Message, state: FSMContext):
     await FSMCreateOrder.type_order.set()
     await send_create_kb(message)
     await ask_to_choose_type(message)
-    client = models.Client.select_from_db(message.from_user.id)
+    client = models.Loader.load_from_db(message.from_user.id, models.Client)
     async with state.proxy() as data:
         data['client'] = client
 
@@ -58,8 +57,8 @@ async def start_admin_creating(message: types.Message, *args):
 
 async def set_client(message: types.Message, state: FSMContext):
     client_id = message.forward_from.id
-    if client_id in models.Client.get_all_ids():
-        client = models.Client.select_from_db(client_id)
+    if client_id in models.Loader.load_all(models.Client):
+        client = models.Loader.load_from_db(client_id, models.Client)
     else:
         first_name = message.forward_from.first_name
         last_name = message.forward_from.last_name
@@ -77,21 +76,22 @@ async def ask_to_choose_type(message: types.Message, *args):
     inl_kb = await inline_kb.make_choose_kb('type_order')
     await message.answer('Оберіть тип роботи будь ласка', reply_markup=inl_kb)
 
-async def ask_to_choose_sb(message:types.Message, *args):
-    inl_kb = await inline_kb.make_choose_kb('subject')
-    await message.answer('Оберіть предмет', reply_markup=inl_kb)
-
 async def choose_order_type(cq: types.CallbackQuery, state: FSMContext, callback_data: dict):
     message = cq.message
     order_type = callback_data['choice']
     await message.answer('Тип обрано')
     async with state.proxy() as data:
         data['type_order'] = order_type
-        data['kind_order'] = models.Order.get_kind(order_type)
+        # data['kind_order'] = models.Order.get_kind(order_type)
     await FSMCreateOrder.next()
     await ask_to_choose_sb(message)
 
-async def choose_order_sb(cq: types.CallbackQuery, state: FSMContext, callback_data: dict):
+async def ask_to_choose_sb(message:types.Message, *args):
+    inl_kb = await inline_kb.make_choose_kb('subject')
+    await message.answer('Оберіть предмет', reply_markup=inl_kb)
+
+async def choose_order_sb(cq: types.CallbackQuery, state: FSMContext, callback_data: dict, raw_state):
+    print(raw_state)
     await cq.message.answer('Предмет обрано')
     async with state.proxy() as data:
         data['subject'] = callback_data['choice']
@@ -104,7 +104,7 @@ async def ask_to_choose_date(message:types.Message, *args):
     await message.answer('оберіть дату', reply_markup=kb)
 
 async def choose_date(cq: types.CallbackQuery, state: FSMContext, callback_data: dict):
-    order_date: date= await TgCalendar().selection(cq, callback_data)
+    order_date:date = await TgCalendar().selection(cq, callback_data)
     if order_date:
         async with state.proxy() as data:
             data['datetime'] = order_date
@@ -139,30 +139,33 @@ async def choose_uni(message:types.Message, state:FSMContext):
     else:
         await message.answer('Скористайтесь кнопкою пошук')
 
-async def set_uni_variants(query:types.InlineQuery, variants:list):
+async def set_uni_variants(query:types.InlineQuery, variants:list, prev_variants:list):
+
+    def make_items(text, variants):
+        items = [
+            InlineQueryResultArticle(
+                input_message_content=InputTextMessageContent(element),
+                id=i, title=element
+            ) for i, element in enumerate(variants) if text in element.lower()]
+        return items
 
     text = query.query or ''
     text = text.lower()
 
-# 3 етапа
-    items = [InlineQueryResultArticle(
-        input_message_content=InputTextMessageContent(element),
-        id=i,
-        title=element
-    ) for i, element in enumerate(variants) if text in element.lower()]
-
+    items = make_items(text, prev_variants)
     if not items:
-        items = [InlineQueryResultArticle(
-            input_message_content=InputTextMessageContent(text),
-            id = 0,
-            title=text
-        )]
+        items = make_items(text, variants)
+        if not items:
+            items = make_items(text, [text])
 
     await query.answer(results=items[:49], cache_time=1, is_personal=True)
 
 async def ask_to_choose_theeme_var(message:types.Message, state: FSMContext, *args):
-    data = await state.get_data()
-    text = 'Напишіть тему' if data['kind_order'] == 'оф' else 'Напишіть варіант'
+    async with state.proxy() as data:
+        order_type = models.Loader.load_by_name(data['type_order'], models.OrderType)
+        data['order_type'] = order_type
+    kind = order_type.kind
+    text = 'Напишіть тему' if kind == 'оф' else 'Напишіть варіант'
     await message.answer(text)
 
 async def choose_theeme_or_variant(message: types.Message, state: FSMContext):
@@ -228,16 +231,28 @@ async def cancel_solution_sending(message: types.Message, state: FSMContext):
     
 async def finish_order_creation(message: types.Message, state: FSMContext):
     data = await state.get_data()
-    order = models.Order(**data)
-    order_description = order.form_description()
+    
+    client = data['client']
+    type_order = data['order_type']
+    university = models.Loader.load_by_name(data['university'], models.University)
+    subject = models.Loader.load_by_name(data['subject'], models.Subject)
     task_files: models.Files = data['task_files']
     solution_files: models.Solutions[str:models.Files] = data['solutions']
+    t_or_v = data['t_or_v']
+    date_time = data['datetime']
+
+    order = models.Order(
+        client, type_order, subject, date_time, t_or_v, university, 
+        task_files=task_files, solutions=solution_files
+        )
+    
+    order_description = order.form_description()
     await message.answer(order_description)
     await task_files.answer_files(message)
     await solution_files.answer_solutions(message)
     order.insert_to_db()
 
-async def no_command(update: types.Message|types.CallbackQuery):
+async def no_command(update: types.Message|types.CallbackQuery, state:FSMContext):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')
 
 async def no_state(message: types.Message):
@@ -258,7 +273,7 @@ def handlers_registration(dp: Dispatcher):
     dp.register_callback_query_handler(choose_date, calendar_callback.filter(), state=FSMCreateOrder.date)
     dp.register_message_handler(choose_time, filters.Regexp(texts.TIME_REGEX), state=FSMCreateOrder.time)
     dp.register_message_handler(wrong_time, state=FSMCreateOrder.time)
-    dp.register_inline_handler(set_uni_variants, ListStateFilter(FSMCreateOrder.university), state=FSMCreateOrder.university)
+    dp.register_inline_handler(set_uni_variants, ListStateFilter(dp, FSMCreateOrder.university), state=FSMCreateOrder.university)
     dp.register_message_handler(choose_uni, state=FSMCreateOrder.university)
     dp.register_message_handler(choose_theeme_or_variant, state=FSMCreateOrder.t_or_v)
 

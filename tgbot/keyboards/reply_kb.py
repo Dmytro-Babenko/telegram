@@ -12,6 +12,13 @@ def make_main_kb():
     main_kb.add(make_oder, write_to_admin_button)
     return main_kb
 
+def make_admin_kb():
+    write_to_admin_button = KeyboardButton('Додати')
+    make_oder = KeyboardButton('Зробити замовлення')
+    main_kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    main_kb.add(make_oder, write_to_admin_button)
+    return main_kb
+
 def make_create_order_kb(back=True, cancel=True, confirm=False, cancel_files=False):
     captions = {
         'Назад':back,
@@ -24,9 +31,6 @@ def make_create_order_kb(back=True, cancel=True, confirm=False, cancel_files=Fal
         create_kb.insert(KeyboardButton(b_text))
     return create_kb
 
-    if back:
-        create_kb.add(KeyboardButton())
-        
 
 
 

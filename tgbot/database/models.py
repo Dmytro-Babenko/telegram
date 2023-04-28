@@ -11,6 +11,38 @@ from aiogram.types.document import Document
 PHOTO_EXTENSION=''
 DB_FILE = 'test.db'
 
+class Loader:
+    db = DB_FILE
+
+    # def __init__(self, db) -> None:
+    #     self.db = db
+    #     pass
+
+    @staticmethod
+    def load_from_db(__id, __class):
+        with sqlite3.connect(Loader.db) as con:
+            cur = con.cursor()
+            return __class.select_from_db(__id, cur)
+
+    @staticmethod
+    def load_all(__class):
+        with sqlite3.connect(Loader.db) as con:
+            cur = con.cursor()
+            return __class.get_all(cur)
+        
+    @staticmethod
+    def load_by_name(__name, __class):
+        with sqlite3.connect(Loader.db) as con:
+            cur = con.cursor()
+            return __class.select_from_db_by_name(__name, cur)
+
+    @staticmethod
+    def load_previous(id_, __class):
+        with sqlite3.connect(Loader.db) as con:
+            cur = con.cursor()
+            return __class.get_previous(id_, cur)
+
+
 class AbstractModel:
     def __init__(self) -> None:
         pass
@@ -23,57 +55,102 @@ class AbstractModel:
         pass 
 
 class Field(AbstractModel):
-    __table = None
+    _table = None
+    _category_name = None
 
-    def __init__(self, name=None, id_=None) -> None:
-
-        if name == id_ == None:
-            raise ValueError('Id or name')
+    def __init__(self, name, id_=None, **args) -> None:
         
         self.name = name
         self.id = id_
 
+    def __repr__(self) -> str:
+        return self.name
+
     def insert_to_db(self):
         with sqlite3.connect(DB_FILE) as con:
             cur = con.cursor()
-            insert_sql= f'INSERT INTO {self.__table} (name) VALUES (?)'
+            insert_sql= f'INSERT INTO {self._table} (name) VALUES (?)'
             cur.execute(insert_sql, (self.name,))
 
-    def select_id(self, cur):
-        cur.row_factory = lambda cursor, value: value[0]
-        self.id = cur.execute(f'SELECT id FROM {self.__table} WHERE name = ?', (self.name,)).fetchone()
-
-    def select_name(self, cur):
-        cur.row_factory = lambda cursor, value: value[0]
-        self.name = cur.execute(f'SELECT name FROM {self.__table} WHERE id = ?', (self.id,)).fetchone()
+    def show_info(self):
+        characteristics = {
+            'Категорія': self._category_name,
+            'Id': self.id,
+            'Назва': self.name,
+        }
+        return '\n'.join(f'{char}: {value}' for char, value in characteristics.items() if value)
 
     @staticmethod
-    def get_all_names(table, cur: sqlite3.Cursor):
+    def select_from_db(_id, cur: sqlite3.Cursor, _class):
+        cur.row_factory = lambda cursor, value: value[0]
+        name = cur.execute(f'SELECT name FROM {_class._table} WHERE id = ?', (_id,)).fetchone()
+        return _class(name, _id)
+
+    @staticmethod
+    def select_from_db_by_name(_name, cur:sqlite3.Cursor, _class):
+        cur.row_factory = lambda cursor, value: value[0]
+        _id = cur.execute(f'SELECT id FROM {_class._table} WHERE name = ?', (_name,)).fetchone()
+        return _class(_name, _id)
+
+    @staticmethod
+    def get_all(table, cur: sqlite3.Cursor):
         cur.row_factory = lambda cursor, value: value[0]
         return cur.execute(f'SELECT name FROM {table}').fetchall()
     
+    @staticmethod
+    def get_previous(table, id_, cur:sqlite3.Cursor):
+        cur.row_factory = lambda cursor, value: value[0]
+        return cur.execute(f'SELECT name FROM {table} WHERE id = ?', (id_,)).fetchall()
+    
 class Subject(Field):
-    __table = 'subjects'
+    _table = 'subjects'
+    _category_name = 'Предмет'
 
     @staticmethod
-    def get_all_names(cur: sqlite3.Cursor):
-        return super().get_all_names(Subject.__table, cur)
+    def get_all(cur: sqlite3.Cursor):
+        return Field.get_all(Subject._table, cur)
+    
+    @staticmethod
+    def get_previous(id_, cur: sqlite3.Cursor):
+        return Field.get_previous(Subject._table, id_, cur)
+
+    @staticmethod
+    def select_from_db(_id, cur: sqlite3.Cursor):
+        return Field.select_from_db(_id, cur, Subject)
+    
+    @staticmethod
+    def select_from_db_by_name(_name, cur):
+        return Field.select_from_db_by_name(_name, cur, Subject)
 
 class University(Field):
-    __table = 'universities'
+    _table = 'universities'
+    _category_name = 'Університет'
 
     @staticmethod
-    def get_all_names(cur: sqlite3.Cursor):
-        return super().get_all_names(University.__table, cur)
+    def get_all(cur: sqlite3.Cursor):
+        return Field.get_all(University._table, cur)
     
-class Type(Field):
-    __table = 'types'
+    @staticmethod
+    def get_previous(id_, cur: sqlite3.Cursor):
+        return Field.get_previous(University._table, id_, cur)
+    
+    @staticmethod
+    def select_from_db(_id, cur: sqlite3.Cursor):
+        return Field.select_from_db(_id, cur, University)
+    
+    @staticmethod
+    def select_from_db_by_name(_name, cur):
+        return Field.select_from_db_by_name(_name, cur, University)
 
-    def __init__(self, name=None, id_=None, kind=None) -> None:
+class OrderType(Field):
+    _table = 'types'
+    _category_name = 'Тип роботи'
+
+    def __init__(self, name, kind, id_=None, **args) -> None:
         super().__init__(name, id_)
         self.__kind = None
         self.kind = kind
-
+    
     @property
     def kind(self):
         return self.__kind
@@ -82,27 +159,49 @@ class Type(Field):
     def kind(self, new_kind):
         if new_kind in ('оф', 'он'):
             self.__kind = new_kind
+        else:
+            raise ValueError('No such kind')
+        
+    def show_info(self):
+        characteristics = {
+            'Категорія': self._category_name,
+            'Id': self.id,
+            'Назва': self.name,
+            'Тип': self.kind
+        }
+        return '\n'.join(f'{char}: {value}' for char, value in characteristics.items() if value)
+        
+    @staticmethod
+    def select_from_db(__id, cur: sqlite3.Cursor):
+        __name, __kind = cur.execute(f'SELECT name, kind FROM {OrderType._table} WHERE id = ?', (__id,)).fetchone()
+        return OrderType(__name, __id, __kind)
+    
+    @staticmethod
+    def select_from_db_by_name(__name, cur: sqlite3.Cursor):
+        __id, __kind = cur.execute(f'SELECT id, kind FROM {OrderType._table} WHERE name = ?', (__name,)).fetchone()
+        return OrderType(__name, __id, __kind)
 
-    def select_kind(self, cur: sqlite3.Cursor):
-        cur.row_factory = lambda cursor, value: value[0]
-        if self.id:
-            return cur.execute(f'SELECT kind FROM {self.__table} WHERE id = ?', (self.id,)).fetchone()
-        return cur.execute(f'SELECT kind FROM {self.__table} WHERE name = ?', (self.name,)).fetchone()
+    # def select_kind(self, cur: sqlite3.Cursor):
+    #     cur.row_factory = lambda cursor, value: value[0]
+    #     if self.id:
+    #         return cur.execute(f'SELECT kind FROM {self.__table} WHERE id = ?', (self.id,)).fetchone()
+    #     return cur.execute(f'SELECT kind FROM {self.__table} WHERE name = ?', (self.name,)).fetchone()
 
     @staticmethod
-    def get_all_names(cur: sqlite3.Cursor):
-        return super().get_all_names(Type.__table, cur)
+    def get_all(cur: sqlite3.Cursor):
+        return Field.get_all(OrderType._table, cur)
+    
+    @staticmethod
+    def get_previous(id_, cur: sqlite3.Cursor):
+        return Field.get_previous(OrderType._table, id_, cur)
         
-
 class Admin(AbstractModel):
     
     @staticmethod
-    def get_all_ids():
-        with sqlite3.connect(DB_FILE) as con:
-            con.row_factory = lambda cursor, row: row[0]
-            cur = con.cursor()
-            sql = 'SELECT telegram_id FROM admins'
-            return cur.execute(sql).fetchall()
+    def get_all(cur):
+        cur.row_factory = lambda cursor, row: row[0]
+        sql = 'SELECT telegram_id FROM admins'
+        return cur.execute(sql).fetchall()
 
 class Client(AbstractModel):
     def __init__(self, telegram_id, first_name, last_name=None, username=None, phone_num=None) -> None:
@@ -123,24 +222,20 @@ class Client(AbstractModel):
             cur.execute(insert_client, values)    
 
     @staticmethod
-    def select_from_db(telegram_id):
-        with sqlite3.connect(DB_FILE) as con:
-            cur = con.cursor()
-            select_client = 'SELECT first_name, last_name, user_name, phone_number FROM clients WHERE telegram_id = ?'
-            client_info = cur.execute(select_client, (telegram_id,)).fetchone()
+    def select_from_db(telegram_id, cur):
+        select_client = 'SELECT first_name, last_name, user_name, phone_number FROM clients WHERE telegram_id = ?'
+        client_info = cur.execute(select_client, (telegram_id,)).fetchone()
         return Client(telegram_id, *client_info)
                 
     @staticmethod
-    def get_all_ids():
-        with sqlite3.connect(DB_FILE) as con:
-            con.row_factory = lambda cursor, row: row[0]
-            cur = con.cursor()
-            sql = 'SELECT telegram_id FROM clients'
-            return cur.execute(sql).fetchall()
+    def get_all(cur):
+        cur.row_factory = lambda cursor, row: row[0]
+        sql = 'SELECT telegram_id FROM clients'
+        return cur.execute(sql).fetchall()
 
 class Order(AbstractModel):
-    def __init__(self, client:Client, type_order: Type, subject: Subject, date_time:datetime, t_or_v:str, 
-                 kind_order ,university:University=None, order_id:int=None, task_files=None, 
+    def __init__(self, client:Client, type_order: OrderType, subject: Subject, date_time:datetime, t_or_v:str, 
+                 university:University=None, order_id:int=None, task_files=None, 
                  solutions=None, **kwargs) -> None:
         self.order_id = order_id
         self.client = client
@@ -149,101 +244,75 @@ class Order(AbstractModel):
         self.datetime = date_time
         self.t_or_v = t_or_v
         self.university = university
-        self.kind = kind_order
         self.task_files:Files = task_files
         self.solutions:Solutions = solutions
 
     def form_description(self):
-        points = ('Тип', 'Предмет', 'Дата та час', 'Тема' if self.kind == 'оф' else 'Варіант')
+        points = ('Тип', 'Предмет', 'Дата та час', 'Тема' if self.type_order.kind == 'оф' else 'Варіант')
         values = (self.type_order, self.subject, self.datetime, self.t_or_v)
         return '\n'.join(f'{point}: {value}' for point, value in zip(points, values))        
 
     def insert_to_db(self):
-        
-        def select_id(table_name, name):
-            return cur.execute(f'SELECT id FROM {table_name} WHERE name = ?', (name,)).fetchone()
-        
+
         with sqlite3.connect(DB_FILE) as con:
             con.row_factory = lambda cursor, row: row[0]
             cur = con.cursor()
 
-            self.type_order.select_id(cur)
-            self.subject.select_id(cur)
-            if self.university:          
-                self.university.select_id(cur)
-            type_id = select_id('types', self.type_order)
-            subject_id = select_id('subjects', self.subject)
-            univ_id = select_id('universities', self.university)
-
             insert_order = """INSERT INTO orders (client_id, type_id, subject_id, order_date, univ_id, theme_or_variant)
                             VALUES (?, ?, ?, ?, ?, ?) """
-            values = (self.client.telegram_id, type_id, subject_id, self.datetime, univ_id, self.t_or_v)
+            values = (self.client.telegram_id, self.type_order.id, self.subject.id, 
+                      self.datetime, self.university.id, self.t_or_v)
             cur.execute(insert_order, values)
             self.order_id = cur.lastrowid
 
             self.task_files.insert_to_db(self.order_id, cur, 'task')
             self.solutions.insert_to_db(self.order_id, cur)
 
-    @staticmethod
-    def get_kind(order_type):
-        with sqlite3.connect(DB_FILE) as con:
-            con.row_factory = lambda cursor, row: row[0]
-            cur = con.cursor()
-            select_kind = 'SELECT kind FROM types WHERE name = ?'
-            order_kind = cur.execute(select_kind, (order_type,)).fetchone()
-            return order_kind
+    # @staticmethod
+    # def get_kind(order_type):
+    #     with sqlite3.connect(DB_FILE) as con:
+    #         con.row_factory = lambda cursor, row: row[0]
+    #         cur = con.cursor()
+    #         select_kind = 'SELECT kind FROM types WHERE name = ?'
+    #         order_kind = cur.execute(select_kind, (order_type,)).fetchone()
+    #         return order_kind
         
     @staticmethod
-    def select_from_db(order_id):
+    def select_from_db(order_id, cur):
 
-        def select_name(table_name, id):
-            return cur.execute(f'SELECT id FROM {table_name} WHERE name = ?', (id,)).fetchone()
+        # def select_name(table_name, id):
+        #     return cur.execute(f'SELECT id FROM {table_name} WHERE name = ?', (id,)).fetchone()
         
         sql_select_order = """SELECT client_id, type_id, subject_id, order_date, univ_id, theme_or_variant 
                             FROM orders
                             WHERE id = ?"""
         
-
-        with sqlite3.connect(DB_FILE) as con:
-            # con.row_factory = lambda cursor, row: row[0]
-            cur = con.cursor()
-            client_id, type_id, subject_id, order_date, univ_id, theme_or_variant = cur.execute(sql_select_order,
-                                                                                                (order_id,)).fetchone()
-            order_type = select_name('types', type_id)
-            order_subject = select_name('subjects', subject_id)
-            order_univ = select_name('universities', univ_id)
-
-            order = Order(
-                type_order=order_type,
-                subject=order_subject,
-                datetime=order_date,
-                t_or_v=theme_or_variant,
-                university=order_univ,
-                kind_order='он'
-            )
-
-            order.order_id = order_id
-
-            order.task_files = Files()
-            order.task_files.add_from_db(order_id, 'task', cur)
-
-            order.solutions = Solutions(Files)
-            order.solutions.add_from_db(order_id, cur)
-
+        client_id, type_id, subject_id, order_date, univ_id, theme_or_variant = cur.execute(sql_select_order,
+                                                                                            (order_id,)).fetchone()
         
-        order.kind = order.get_kind(order.type_order)
-        order.client = Client.select_from_db(client_id)
+        order_client = Client.select_from_db(client_id, cur)  
+        order_type = OrderType.select_from_db(type_id, cur)
+        order_subject = Subject.select_from_db(subject_id, cur)
+        order_univ = University.select_from_db(univ_id, cur) if univ_id else None
 
-            
+        order = Order(
+            client=order_client,
+            order_id=order_id,
+            type_order=order_type,
+            subject=order_subject,
+            datetime=order_date,
+            t_or_v=theme_or_variant,
+            university=order_univ,
+            date_time=order_date
+        )
+
+        order.task_files = Files()
+        order.task_files.add_from_db(order_id, 'task', cur)
+
+        order.solutions = Solutions(Files)
+        order.solutions.add_from_db(order_id, cur)          
         return order
     
-
-
-    
-
-
-
-
             
 def file_group_checking(group_type):
     def decorator(func):
@@ -268,8 +337,6 @@ class PhotoGroup(CustomMediaGroup):
     pass
 
 class TextGroup(UserList):
-    # def __init__(self, seq='') -> None:
-    #     super().__init__(seq)
 
     async def sending(self, bot:Bot, chat_id):
         for text in self:
@@ -423,6 +490,6 @@ class Solutions(defaultdict):
 
 
 if __name__ == '__main__':
-    a = Type(name='ada', kind='оф')
-    print(a.kind)
+    a = Loader.load_from_db(2, Order)
+    print(a.subject)
         
