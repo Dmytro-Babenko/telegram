@@ -1,4 +1,5 @@
 import re
+import sqlite3
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
@@ -10,6 +11,14 @@ def need_admin():
         setattr(func, 'need_admins', True)
         return func
     return decorator
+
+def errors_interceptor(func):
+    async def inner(update: types.Message|types.CallbackQuery, *args, **kwargs):
+        try: 
+            return await func(update, *args, **kwargs)
+        except sqlite3.IntegrityError:
+            await update.answer('Цей обєкт вже знаходиться в базі данних')
+    return inner
 
 def get_file_id_and_ext(message: types.Message) -> tuple[str, str]:
     file_id = message.document.file_id

@@ -36,8 +36,8 @@ async def registration(message:types.Message, state:FSMContext):
     else:
         await message.answer('Вибачте, це не ваш контакт')
 
-async def no_command(message: types.Message):
-    await message.answer('There are no command')
+async def no_command(update: types.Message|types.CallbackQuery):
+    await update.answer('There are no command')
 
 @need_admin()
 async def send_link_to_admin(message: types.Message, admin):

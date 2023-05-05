@@ -11,7 +11,7 @@ from tgbot.keyboards import reply_kb, inline_kb
 from tgbot.keyboards.tg_calendar import TgCalendar, calendar_callback
 from tgbot.texts import texts
 from tgbot.FSMStates.client_st import FSMCreateOrder
-from tgbot.utils.callback_data import subject_cb_data, type_order_cb_data
+import tgbot.utils.callback_data as cb_d 
 from tgbot.utils.helpers_for_hendlers import delete_state_value, put_sollution_to_data, define_file, define_text_material
 
 async def back(message: types.Message, state: FSMContext):
@@ -268,8 +268,8 @@ def handlers_registration(dp: Dispatcher):
     dp.register_message_handler(start_creating, filters.Text('Зробити замовлення'))
     dp.register_message_handler(set_client, filters.ForwardedMessageFilter(True), state=FSMCreateOrder.client)
 
-    dp.register_callback_query_handler(choose_order_type, type_order_cb_data.filter(), state=FSMCreateOrder.type_order)
-    dp.register_callback_query_handler(choose_order_sb, subject_cb_data.filter(), state=FSMCreateOrder.subject)
+    dp.register_callback_query_handler(choose_order_type, cb_d.type_order_cb_data.filter(), state=FSMCreateOrder.type_order)
+    dp.register_callback_query_handler(choose_order_sb, cb_d.subject_cb_data.filter(), state=FSMCreateOrder.subject)
     dp.register_callback_query_handler(choose_date, calendar_callback.filter(), state=FSMCreateOrder.date)
     dp.register_message_handler(choose_time, filters.Regexp(texts.TIME_REGEX), state=FSMCreateOrder.time)
     dp.register_message_handler(wrong_time, state=FSMCreateOrder.time)

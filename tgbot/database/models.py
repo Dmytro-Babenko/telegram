@@ -58,9 +58,9 @@ class Field(AbstractModel):
     _table = None
     _category_name = None
 
-    def __init__(self, name, id_=None, **args) -> None:
+    def __init__(self, name: str, id_=None, **args) -> None:
         
-        self.name = name
+        self.name = name.capitalize()
         self.id = id_
 
     def __repr__(self) -> str:
@@ -150,13 +150,15 @@ class OrderType(Field):
         super().__init__(name, id_)
         self.__kind = None
         self.kind = kind
+        print(self.kind)
     
     @property
     def kind(self):
         return self.__kind
     
     @kind.setter
-    def kind(self, new_kind):
+    def kind(self, new_kind: str):
+        new_kind = new_kind.lower()
         if new_kind in ('оф', 'он'):
             self.__kind = new_kind
         else:
@@ -170,6 +172,13 @@ class OrderType(Field):
             'Тип': self.kind
         }
         return '\n'.join(f'{char}: {value}' for char, value in characteristics.items() if value)
+    
+    def insert_to_db(self):
+        with sqlite3.connect(DB_FILE) as con:
+            cur = con.cursor()
+            insert_sql= f'INSERT INTO {self._table} (name, kind) VALUES (?, ?)'
+            cur.execute(insert_sql, (self.name, self.kind))
+
         
     @staticmethod
     def select_from_db(__id, cur: sqlite3.Cursor):

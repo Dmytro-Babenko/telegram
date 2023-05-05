@@ -4,9 +4,10 @@ from aiogram.dispatcher import FSMContext
 from tgbot.database.models import OrderType, University, Subject
 from tgbot.filters.admin_filters import IsAdmin
 from tgbot.FSMStates.admin import FSMAdding, FSMAddingType
-from tgbot.keyboards.inline_kb import make_choose_kb, make_kind_kb
+from tgbot.keyboards.inline_kb import make_choose_kb, make_kind_kb, yes_no_kb
 from tgbot.keyboards.reply_kb import make_admin_kb
-from tgbot.utils.callback_data import categories_cb_data, kind_cb_data
+import tgbot.utils.callback_data as cb_d 
+import tgbot.utils.helpers_for_hendlers as hfh
 
 CATEGORIES = {
     'Предмет': Subject,
@@ -45,13 +46,13 @@ async def set_name(message: types.Message, state: FSMContext):
             data['obj'] = field
             await FSMAdding.confirmation.set()
             await ask_confirmation(message, field)
-            
+
+
 async def set_kind(cb: types.CallbackQuery, state: FSMContext, callback_data):
     kind = callback_data['choice']
     message = cb.message
     async with state.proxy() as data:
         data['kind'] = kind
-        a = {**data}
         field = create_obj(**data)
         data['obj'] = field
     await FSMAdding.next()
@@ -66,20 +67,26 @@ def create_obj(category, name, kind=None, **args):
 async def ask_confirmation(message: types.Message, __obj):
     text = __obj.show_info()
     await message.answer(text)
-    await message.answer('Підтверджуєте інформацію?')
+    kb = yes_no_kb()
+    await message.answer('Підтверджуєте інформацію?', reply_markup=kb)
     
-async def add_to_db(message: types.Message, state: FSMContext):
+@hfh.errors_interceptor
+async def add_to_db(message: types.Message, state: FSMContext, *args, **kwargs):
     data = await state.get_data()
     field: University|Subject|OrderType  = data['obj']
     field.insert_to_db()
     await state.finish()
     await message.answer('Готово')
 
+async def cancel_adding(message: types.Message, state: FSMContext):
+    pass
+
 def hendler_registration(dp: Dispatcher):
     dp.register_message_handler(start_admin_panel, IsAdmin(), commands='admin')
     dp.register_message_handler(add, IsAdmin(), filters.Text('Додати'))
-    dp.register_callback_query_handler(choose_category, categories_cb_data.filter(), state=FSMAdding.category)
+    dp.register_callback_query_handler(choose_category, cb_d.categories_cb_data.filter(), state=FSMAdding.category)
     dp.register_message_handler(set_name, state=FSMAdding.name)
-    dp.register_callback_query_handler(set_kind, kind_cb_data.filter(), state=FSMAdding.kind)
-    dp.register_message_handler(add_to_db, filters.Text('Так'), state=FSMAdding.confirmation)
+    dp.register_callback_query_handler(set_kind, cb_d.kind_cb_data.filter(), state=FSMAdding.kind)
+    dp.register_callback_query_handler(add_to_db, cb_d.yes_cb_data.filter(), state=FSMAdding.confirmation)
+    dp.register_callback_query_handler(cancel_adding, cb_d.no_cb_data.filter(), state=FSMAdding.confirmation)
     pass

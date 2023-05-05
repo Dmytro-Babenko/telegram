@@ -7,6 +7,12 @@ class FSMAdding(StatesGroup):
     kind = State()
     confirmation = State()
     
+class FSMTypeAdding(FSMAdding):
+    category = State()
+    name = State()
+    kind = State()
+    confirmation = State()
+
 class FSMAddingType(FSMAdding):
     kind = State()
 

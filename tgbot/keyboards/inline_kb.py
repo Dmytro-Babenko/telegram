@@ -28,3 +28,7 @@ async def make_inline_search_kb():
     search_button = InlineKeyboardButton('Пошук', switch_inline_query_current_chat='')
     kb = InlineKeyboardMarkup(inline_keyboard=[[search_button]])
     return kb
+
+def yes_no_kb():
+    return InlineKeyboardMarkup(2, [[InlineKeyboardButton('Так', callback_data=cb_d.yes_cb_data.new('Yes')),
+                                     InlineKeyboardButton('Ні', callback_data=cb_d.yes_cb_data.new('No'))]])
