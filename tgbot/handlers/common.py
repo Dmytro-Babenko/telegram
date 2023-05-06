@@ -13,13 +13,12 @@ import tgbot.utils.helpers_for_hendlers as hfh
 async def back(message: types.Message, state: FSMContext):
     data = await state.get_data()
     state_group, return_hendlers = data.get('hendlers_dct', (None, {}))
-    state_name = await state.get_state()
-    back_hendler = return_hendlers.get(state_name, no_command if state_name else no_state)
+    previous_name = None
     if state_group:
         await hfh.delete_state_value(state)
         previous_name = await state_group.previous()
         await hfh.delete_state_value(state)
-    back_hendler = return_hendlers.get(state_name, no_command if state_name else no_state)
+    back_hendler = return_hendlers.get(previous_name, no_command if previous_name else no_state)
     # print(await state.get_data())
     await back_hendler(message, state)
 

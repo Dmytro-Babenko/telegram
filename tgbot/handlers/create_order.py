@@ -257,7 +257,7 @@ async def no_state(message: types.Message, *args):
     await message.answer('Скористайтесь меню', reply_markup=main_kb)
 
 HENDLERS = (
-    cancel_order, cancel_order, ask_to_choose_type, ask_to_choose_sb, 
+    cancel_order, ask_to_choose_type, ask_to_choose_sb, 
     ask_to_choose_date, ask_to_choose_time, ask_to_choose_uni,
     ask_to_choose_theeme_var, ask_to_send_files, ask_to_send_solution
     )

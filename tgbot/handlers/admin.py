@@ -17,8 +17,9 @@ CATEGORIES = {
 
 
 
-async def cancel_adding(message: types.Message, state: FSMContext):
+async def cancel_adding(update: types.Message|types.CallbackQuery, state: FSMContext):
     await state.finish()
+    message = update.message if update.message else update
     await message.answer('Додавання запису скасовано', reply_markup=make_admin_kb())
 
 async def start_admin_panel(message: types.Message):
@@ -96,7 +97,7 @@ async def add_to_db(message: types.Message, state: FSMContext, *args, **kwargs):
     await message.answer('Готово')
 
 HENDLERS = (
-    cancel_adding, ask_to_choose_category, 
+    ask_to_choose_category, 
     ask_to_write_name, ask_to_choose_kind
     )
 

@@ -188,7 +188,7 @@ class OrderType(Field):
     @staticmethod
     def select_from_db_by_name(__name, cur: sqlite3.Cursor):
         __id, __kind = cur.execute(f'SELECT id, kind FROM {OrderType._table} WHERE name = ?', (__name,)).fetchone()
-        return OrderType(__name, __id, __kind)
+        return OrderType(__name, __kind, __id)
 
     # def select_kind(self, cur: sqlite3.Cursor):
     #     cur.row_factory = lambda cursor, value: value[0]
