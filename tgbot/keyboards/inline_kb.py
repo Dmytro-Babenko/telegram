@@ -31,4 +31,4 @@ async def make_inline_search_kb():
 
 def yes_no_kb():
     return InlineKeyboardMarkup(2, [[InlineKeyboardButton('Так', callback_data=cb_d.yes_cb_data.new('Yes')),
-                                     InlineKeyboardButton('Ні', callback_data=cb_d.yes_cb_data.new('No'))]])
+                                     InlineKeyboardButton('Ні', callback_data=cb_d.no_cb_data.new('No'))]])

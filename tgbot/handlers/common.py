@@ -8,7 +8,20 @@ from tgbot.texts import texts
 from tgbot.filters.create_order_filters import ListStateFilter
 from tgbot.FSMStates.client_st import FSMRegistration
 from tgbot.middlewares.common_mw import AdminsIDs
-from tgbot.utils.helpers_for_hendlers import need_admin
+import tgbot.utils.helpers_for_hendlers as hfh
+
+async def back(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    state_group, return_hendlers = data.get('hendlers_dct', (None, {}))
+    state_name = await state.get_state()
+    back_hendler = return_hendlers.get(state_name, no_command if state_name else no_state)
+    if state_group:
+        await hfh.delete_state_value(state)
+        previous_name = await state_group.previous()
+        await hfh.delete_state_value(state)
+    back_hendler = return_hendlers.get(state_name, no_command if state_name else no_state)
+    # print(await state.get_data())
+    await back_hendler(message, state)
 
 def get_full_name(first_name, last_name):
     return f'{first_name} {last_name}' if last_name else first_name
@@ -36,16 +49,20 @@ async def registration(message:types.Message, state:FSMContext):
     else:
         await message.answer('Вибачте, це не ваш контакт')
 
-async def no_command(update: types.Message|types.CallbackQuery):
+async def no_command(update: types.Message|types.CallbackQuery, *args):
     await update.answer('There are no command')
 
-@need_admin()
+async def no_state(update: types.Message|types.CallbackQuery, *args):
+    await update.answer('Скористайтесь меню', reply_markup=reply_kb.make_main_kb())
+
+@hfh.need_admin()
 async def send_link_to_admin(message: types.Message, admin):
     await message.answer(
         f'Щоб написати адміну перейдіть за посиланням:\n{texts.TG_LINK}{admin}'
         )
     
 def hendlers_registration(dp: Dispatcher):
+    dp.register_message_handler(back, filters.Text('Назад'), state='*')
     dp.register_message_handler(known_start, commands='start')
     dp.register_message_handler(registration,content_types='contact', state=FSMRegistration.contact)
     dp.register_message_handler(send_link_to_admin, filters.Text(equals='Написати адміну'))

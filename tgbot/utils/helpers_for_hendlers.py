@@ -12,6 +12,12 @@ def need_admin():
         return func
     return decorator
 
+def state_gr_and_dct_for_return(states_group, hendlers: list):
+    return states_group, {
+        state_name:hendler for state_name, hendler 
+        in zip(states_group.all_states_names, hendlers)
+    }
+
 def errors_interceptor(func):
     async def inner(update: types.Message|types.CallbackQuery, *args, **kwargs):
         try: 

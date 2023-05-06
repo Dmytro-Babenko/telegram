@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from inspect import signature
 import re
 
 from aiogram import Dispatcher, types
@@ -10,30 +11,23 @@ from tgbot.filters.create_order_filters import ListStateFilter, IsAdmin
 from tgbot.keyboards import reply_kb, inline_kb
 from tgbot.keyboards.tg_calendar import TgCalendar, calendar_callback
 from tgbot.texts import texts
-from tgbot.FSMStates.client_st import FSMCreateOrder
+from tgbot.FSMStates.client_st import FSMCreateOrder, StatesGroup
 import tgbot.utils.callback_data as cb_d 
-from tgbot.utils.helpers_for_hendlers import delete_state_value, put_sollution_to_data, define_file, define_text_material
+import tgbot.utils.helpers_for_hendlers as hfh
 
-async def back(message: types.Message, state: FSMContext):
 
-    HENDLERS = (
-        cancel_order, cancel_order, ask_to_choose_type, ask_to_choose_sb, 
-        ask_to_choose_date, ask_to_choose_time, ask_to_choose_uni,
-        ask_to_choose_theeme_var, ask_to_send_files, ask_to_send_solution
-        )
-    
-    back_hendlers = {
-        state_name:hendler for state_name, hendler 
-        in zip(FSMCreateOrder.all_states_names, HENDLERS)
-        }
-    
-    back_hendler = back_hendlers.get(await state.get_state(), cancel_order)
-    await delete_state_value(state)
-    await FSMCreateOrder.previous()
-    await delete_state_value(state)
-    print(await state.get_data())
-    await back_hendler(message, state)
 
+# async def back(message: types.Message, state: FSMContext):
+#     data = await state.get_data()
+#     state_group, return_hendlers = data.get('hendlers_dct', (None, {}))
+#     back_hendler = return_hendlers.get(await state.get_state(), no_state)
+#     if state_group:
+#         await hfh.delete_state_value(state)
+#         await state_group.previous()
+#         await hfh.delete_state_value(state)
+#     # print(await state.get_data())
+#     await back_hendler(message, state)
+# FSMCreateOrder.previous()
 async def cancel_order(message: types.Message, state: FSMContext):
     await state.finish()
     await message.answer('Оформлення замовлення скасовано', reply_markup=reply_kb.make_main_kb())
@@ -49,11 +43,14 @@ async def start_creating(message:types.Message, state: FSMContext):
     client = models.Loader.load_from_db(message.from_user.id, models.Client)
     async with state.proxy() as data:
         data['client'] = client
+        data['hendlers_dct'] = STATE_GR_AND_BACK_HENDLERS
 
-async def start_admin_creating(message: types.Message, *args):
+async def start_admin_creating(message: types.Message, state: FSMContext, *args):
     await FSMCreateOrder.client.set()
     await send_create_kb(message)
     await message.answer('Перещліть повідомлення від клієнта')
+    async with state.proxy() as data:
+        data['hendlers_dct'] = STATE_GR_AND_BACK_HENDLERS
 
 async def set_client(message: types.Message, state: FSMContext):
     client_id = message.forward_from.id
@@ -186,26 +183,26 @@ async def ask_to_send_solution(message: types.Message, state: FSMContext):
         data['task_num'] = ''
 
 async def get_task_files(message: types.Message, state: FSMContext):
-    file = define_file(message)
+    file = hfh.define_file(message)
     async with state.proxy() as data:
         files:models.Files = data['task_files']
         files.add_element(file)
 
 async def get_solution_files(message: types.Message, state: FSMContext):
-    file = define_file(message)
+    file = hfh.define_file(message)
     async with state.proxy() as data:
-        put_sollution_to_data(data, file)
+        hfh.put_sollution_to_data(data, file)
 
 async def get_text_task(message: types.Message, state: FSMContext):
-    file = define_text_material(message)
+    file = hfh.define_text_material(message)
     async with state.proxy() as data:
         files: models.Files = data['task_files']
         files.add_element(file)
 
 async def get_text_solution(message: types.Message, state: FSMContext):
-    file, task_num = define_text_material(message, True)
+    file, task_num = hfh.define_text_material(message, True)
     async with state.proxy() as data:
-        put_sollution_to_data(data, file, task_num=task_num)
+        hfh.put_sollution_to_data(data, file, task_num=task_num)
 
 async def finish_sending_task(message: types.Message, state: FSMContext):
     # bot = message.bot
@@ -222,11 +219,11 @@ async def set_task_num(message: types.Message, state: FSMContext):
         data['task_num'] = message.text
 
 async def cancel_task_sending(message: types.Message, state: FSMContext):
-    await delete_state_value(state)
+    await hfh.delete_state_value(state)
     await ask_to_send_files(message, state)
 
 async def cancel_solution_sending(message: types.Message, state: FSMContext):
-    await delete_state_value(state)
+    await hfh.delete_state_value(state)
     await ask_to_send_solution(message, state)
     
 async def finish_order_creation(message: types.Message, state: FSMContext):
@@ -255,14 +252,22 @@ async def finish_order_creation(message: types.Message, state: FSMContext):
 async def no_command(update: types.Message|types.CallbackQuery, state:FSMContext):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')
 
-async def no_state(message: types.Message):
+async def no_state(message: types.Message, *args):
     main_kb = reply_kb.make_main_kb()
     await message.answer('Скористайтесь меню', reply_markup=main_kb)
+
+HENDLERS = (
+    cancel_order, cancel_order, ask_to_choose_type, ask_to_choose_sb, 
+    ask_to_choose_date, ask_to_choose_time, ask_to_choose_uni,
+    ask_to_choose_theeme_var, ask_to_send_files, ask_to_send_solution
+    )
+
+STATE_GR_AND_BACK_HENDLERS = hfh.state_gr_and_dct_for_return(FSMCreateOrder, HENDLERS)
 
 def handlers_registration(dp: Dispatcher):
 
     dp.register_message_handler(cancel_order, filters.Text('Скасувати замовлення'), state='*')
-    dp.register_message_handler(back, filters.Text('Назад'), state='*')
+    # dp.register_message_handler(back, filters.Text('Назад'), state='*')
 
     dp.register_message_handler(start_admin_creating, IsAdmin(), filters.Text('Зробити замовлення'))
     dp.register_message_handler(start_creating, filters.Text('Зробити замовлення'))

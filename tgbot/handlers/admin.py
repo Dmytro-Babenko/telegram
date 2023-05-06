@@ -3,7 +3,7 @@ from aiogram.dispatcher import FSMContext
 
 from tgbot.database.models import OrderType, University, Subject
 from tgbot.filters.admin_filters import IsAdmin
-from tgbot.FSMStates.admin import FSMAdding, FSMAddingType
+from tgbot.FSMStates.admin import FSMAdding
 from tgbot.keyboards.inline_kb import make_choose_kb, make_kind_kb, yes_no_kb
 from tgbot.keyboards.reply_kb import make_admin_kb
 import tgbot.utils.callback_data as cb_d 
@@ -15,12 +15,23 @@ CATEGORIES = {
     'Тип': OrderType
 }
 
+
+
+async def cancel_adding(message: types.Message, state: FSMContext):
+    await state.finish()
+    await message.answer('Додавання запису скасовано', reply_markup=make_admin_kb())
+
 async def start_admin_panel(message: types.Message):
     admin_kb = make_admin_kb()
     await message.answer('Доступ надано! Користайтеся меню', reply_markup=admin_kb)
 
-async def add(message: types.Message):
+async def add(message: types.Message, state: FSMContext):
     await FSMAdding.category.set()
+    await ask_to_choose_category(message)
+    async with state.proxy() as data:
+        data['hendlers_dct'] = STATE_GR_AND_BACK_HENDLERS
+
+async def ask_to_choose_category(message: types.Message, *args):
     categories_kb = await make_choose_kb('categories')
     await message.answer('Оберіть тип', reply_markup=categories_kb)
 
@@ -30,7 +41,10 @@ async def choose_category(cb: types.CallbackQuery, state: FSMContext, callback_d
     async with state.proxy() as data:
         data['category'] = category
     await FSMAdding.next()
-    await cb.message.answer('Напишіть назву')
+    await ask_to_write_name(cb.message)
+
+async def ask_to_write_name(message: types.Message, *args):
+    await message.answer('Напишіть назву')
 
 async def set_name(message: types.Message, state: FSMContext):
     name = message.text
@@ -39,13 +53,16 @@ async def set_name(message: types.Message, state: FSMContext):
         category = data['category']
         if category == 'Тип':
             await FSMAdding.next()
-            kind_kb = make_kind_kb()
-            await message.answer('Оберіть тип', reply_markup=kind_kb)
+            await ask_to_choose_kind(message)
         else:
             field = create_obj(**data)
             data['obj'] = field
             await FSMAdding.confirmation.set()
             await ask_confirmation(message, field)
+
+async def ask_to_choose_kind(message: types.Message, *args):
+        kind_kb = make_kind_kb()
+        await message.answer('Оберіть тип', reply_markup=kind_kb)
 
 
 async def set_kind(cb: types.CallbackQuery, state: FSMContext, callback_data):
@@ -78,8 +95,12 @@ async def add_to_db(message: types.Message, state: FSMContext, *args, **kwargs):
     await state.finish()
     await message.answer('Готово')
 
-async def cancel_adding(message: types.Message, state: FSMContext):
-    pass
+HENDLERS = (
+    cancel_adding, ask_to_choose_category, 
+    ask_to_write_name, ask_to_choose_kind
+    )
+
+STATE_GR_AND_BACK_HENDLERS = hfh.state_gr_and_dct_for_return(FSMAdding, HENDLERS)
 
 def hendler_registration(dp: Dispatcher):
     dp.register_message_handler(start_admin_panel, IsAdmin(), commands='admin')
