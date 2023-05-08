@@ -6,10 +6,14 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 from tgbot import config
 from tgbot.handlers import common, create_order, admin
-from tgbot.middlewares.common_mw import RegistrationUsers, AdminsIDs, CallbackQueryAnswer
-from tgbot.filters.create_order_filters import ListStateFilter, IsAdmin
+from tgbot.middlewares.common_mw import RegistrationUsers, AdminsIDs, CallbackQueryAnswer, ConnectionController
+from tgbot.filters.create_order_filters import ListStateFilter
+from tgbot.filters.admin_filters import IsAdmin
+from tgbot.database.models import ConnectionPool
 
 def register_middlewares(dp: Dispatcher):
+    conn_pull = ConnectionPool()
+    dp.setup_middleware(ConnectionController(con_pull=conn_pull))
     dp.setup_middleware(RegistrationUsers())
     dp.setup_middleware(AdminsIDs())
     dp.setup_middleware(CallbackQueryAnswer())

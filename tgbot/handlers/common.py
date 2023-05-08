@@ -10,7 +10,7 @@ from tgbot.FSMStates.client_st import FSMRegistration
 from tgbot.middlewares.common_mw import AdminsIDs
 import tgbot.utils.helpers_for_hendlers as hfh
 
-async def back(message: types.Message, state: FSMContext):
+async def back(message: types.Message, state: FSMContext, db_worker):
     data = await state.get_data()
     state_group, return_hendlers = data.get('hendlers_dct', (None, {}))
     previous_name = None
@@ -20,7 +20,7 @@ async def back(message: types.Message, state: FSMContext):
         await hfh.delete_state_value(state)
     back_hendler = return_hendlers.get(previous_name, no_command if previous_name else no_state)
     # print(await state.get_data())
-    await back_hendler(message, state)
+    await back_hendler(message, state, db_worker)
 
 def get_full_name(first_name, last_name):
     return f'{first_name} {last_name}' if last_name else first_name

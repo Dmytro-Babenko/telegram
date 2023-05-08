@@ -7,7 +7,8 @@ from aiogram.dispatcher import filters, FSMContext
 from aiogram.types import InlineQueryResultArticle, InputTextMessageContent
 
 from tgbot.database import models
-from tgbot.filters.create_order_filters import ListStateFilter, IsAdmin
+from tgbot.filters.create_order_filters import ListStateFilter
+from tgbot.filters.admin_filters import IsAdmin
 from tgbot.keyboards import reply_kb, inline_kb
 from tgbot.keyboards.tg_calendar import TgCalendar, calendar_callback
 from tgbot.texts import texts
@@ -52,10 +53,10 @@ async def start_admin_creating(message: types.Message, state: FSMContext, *args)
     async with state.proxy() as data:
         data['hendlers_dct'] = STATE_GR_AND_BACK_HENDLERS
 
-async def set_client(message: types.Message, state: FSMContext):
+async def set_client(message: types.Message, state: FSMContext, db_worker: models.DBWorker):
     client_id = message.forward_from.id
-    if client_id in models.Loader.load_all(models.Client):
-        client = models.Loader.load_from_db(client_id, models.Client)
+    if client_id in db_worker.load_all(models.Client):
+        client = db_worker.load_from_db(client_id, models.Client)
     else:
         first_name = message.forward_from.first_name
         last_name = message.forward_from.last_name
@@ -88,7 +89,6 @@ async def ask_to_choose_sb(message:types.Message, *args):
     await message.answer('Оберіть предмет', reply_markup=inl_kb)
 
 async def choose_order_sb(cq: types.CallbackQuery, state: FSMContext, callback_data: dict, raw_state):
-    print(raw_state)
     await cq.message.answer('Предмет обрано')
     async with state.proxy() as data:
         data['subject'] = callback_data['choice']
@@ -127,12 +127,12 @@ async def wrong_time(message:types.Message):
 async def ask_to_choose_uni(message:types.Message, *args):
     await message.answer('Оберіть університет', reply_markup=await inline_kb.make_inline_search_kb())
 
-async def choose_uni(message:types.Message, state:FSMContext):
+async def choose_uni(message:types.Message, state:FSMContext, db_worker: models.DBWorker):
     if message.via_bot:
         async with state.proxy() as data:
             data['university'] = message.text
         await FSMCreateOrder.next()
-        await ask_to_choose_theeme_var(message, state)
+        await ask_to_choose_theeme_var(message, state, db_worker)
     else:
         await message.answer('Скористайтесь кнопкою пошук')
 
@@ -157,9 +157,9 @@ async def set_uni_variants(query:types.InlineQuery, variants:list, prev_variants
 
     await query.answer(results=items[:49], cache_time=1, is_personal=True)
 
-async def ask_to_choose_theeme_var(message:types.Message, state: FSMContext, *args):
+async def ask_to_choose_theeme_var(message:types.Message, state: FSMContext, db_worker: models.DBWorker, *args):
     async with state.proxy() as data:
-        order_type = models.Loader.load_by_name(data['type_order'], models.OrderType)
+        order_type = db_worker.load_by_name(data['type_order'], models.OrderType)
         data['order_type'] = order_type
     kind = order_type.kind
     text = 'Напишіть тему' if kind == 'оф' else 'Напишіть варіант'
@@ -226,13 +226,13 @@ async def cancel_solution_sending(message: types.Message, state: FSMContext):
     await hfh.delete_state_value(state)
     await ask_to_send_solution(message, state)
     
-async def finish_order_creation(message: types.Message, state: FSMContext):
+async def finish_order_creation(message: types.Message, state: FSMContext, db_worker: models.DBWorker):
     data = await state.get_data()
     
     client = data['client']
     type_order = data['order_type']
-    university = models.Loader.load_by_name(data['university'], models.University)
-    subject = models.Loader.load_by_name(data['subject'], models.Subject)
+    university = db_worker.load_by_name(data['university'], models.University)
+    subject = db_worker.load_by_name(data['subject'], models.Subject)
     task_files: models.Files = data['task_files']
     solution_files: models.Solutions[str:models.Files] = data['solutions']
     t_or_v = data['t_or_v']
@@ -252,7 +252,7 @@ async def finish_order_creation(message: types.Message, state: FSMContext):
 async def no_command(update: types.Message|types.CallbackQuery, state:FSMContext):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')
 
-async def no_state(message: types.Message, *args):
+async def no_state(message: types.Message, db_worker, *args):
     main_kb = reply_kb.make_main_kb()
     await message.answer('Скористайтесь меню', reply_markup=main_kb)
 

@@ -1,46 +1,67 @@
 from collections import UserList, UserString, defaultdict
 from datetime import datetime
 import sqlite3
+from queue import Queue, Empty
 
 from aiogram import types, Bot
-from aiogram.types.document import Document
+
 
 # from tgbot.texts.texts import PHOTO_EXTENSION
 # from tgbot.database.data import DB_FILE
 
-PHOTO_EXTENSION=''
+PHOTO_EXTENSION='.jpg'
 DB_FILE = 'test.db'
 
-class Loader:
+class ConnectionPool:
+    # _max_size = 2
+    # _db = DB_FILE
+    # _pull = Queue(_max_size)
+
+    def __init__(self, max_size=2, db_file=DB_FILE) -> None:
+        self._max_size = max_size
+        self._db = db_file
+        self._pull = Queue(max_size)
+        pass
+
+    def get_conn(self):
+        # print(self._pull.queue)
+        try:
+            return self._pull.get(block=False)
+        except Empty:
+            return sqlite3.connect(self._db)
+    
+    def put_conn(self, conn: sqlite3.Connection):
+        # print(self._pull.queue)
+        if self._pull.qsize() < self._max_size:
+            # print('a')
+            self._pull.put(conn, block=False)
+            # print(self._pull.queue)
+        else:
+            conn.close()
+
+
+class DBWorker:
     db = DB_FILE
 
-    # def __init__(self, db) -> None:
-    #     self.db = db
-    #     pass
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self.conn = conn
+        pass
 
-    @staticmethod
-    def load_from_db(__id, __class):
-        with sqlite3.connect(Loader.db) as con:
-            cur = con.cursor()
-            return __class.select_from_db(__id, cur)
+    def load_from_db(self, __id, __class):
+        cur = self.conn.cursor()
+        return __class.select_from_db(__id, cur)
 
-    @staticmethod
-    def load_all(__class):
-        with sqlite3.connect(Loader.db) as con:
-            cur = con.cursor()
-            return __class.get_all(cur)
+    def load_all(self, __class):
+        cur = self.conn.cursor()
+        return __class.get_all(cur)
         
-    @staticmethod
-    def load_by_name(__name, __class):
-        with sqlite3.connect(Loader.db) as con:
-            cur = con.cursor()
-            return __class.select_from_db_by_name(__name, cur)
+    def load_by_name(self, __name, __class):
+        cur = self.conn.cursor()
+        return __class.select_from_db_by_name(__name, cur)
 
-    @staticmethod
-    def load_previous(id_, __class):
-        with sqlite3.connect(Loader.db) as con:
-            cur = con.cursor()
-            return __class.get_previous(id_, cur)
+    def load_previous(self, id_, __class):
+        cur = self.conn.cursor()
+        return __class.get_previous(id_, cur)
 
 
 class AbstractModel:
@@ -57,6 +78,7 @@ class AbstractModel:
 class Field(AbstractModel):
     _table = None
     _category_name = None
+    _column = None
 
     def __init__(self, name: str, id_=None, **args) -> None:
         
@@ -98,21 +120,24 @@ class Field(AbstractModel):
         return cur.execute(f'SELECT name FROM {table}').fetchall()
     
     @staticmethod
-    def get_previous(table, id_, cur:sqlite3.Cursor):
+    def get_previous(table, _column, _client_id, cur:sqlite3.Cursor):
         cur.row_factory = lambda cursor, value: value[0]
-        return cur.execute(f'SELECT name FROM {table} WHERE id = ?', (id_,)).fetchall()
+        sql_get_ids = f'SELECT DISTINCT {_column} FROM orders WHERE client_id = ?'
+        return cur.execute(f'SELECT name FROM {table} WHERE id IN ({sql_get_ids})', (_client_id,)).fetchall()
+
     
 class Subject(Field):
     _table = 'subjects'
     _category_name = 'Предмет'
+    _column = 'subject_id'
 
     @staticmethod
     def get_all(cur: sqlite3.Cursor):
         return Field.get_all(Subject._table, cur)
     
     @staticmethod
-    def get_previous(id_, cur: sqlite3.Cursor):
-        return Field.get_previous(Subject._table, id_, cur)
+    def get_previous(_client_id, cur: sqlite3.Cursor):
+        return Field.get_previous(Subject._table, Subject._column, _client_id, cur)
 
     @staticmethod
     def select_from_db(_id, cur: sqlite3.Cursor):
@@ -125,14 +150,15 @@ class Subject(Field):
 class University(Field):
     _table = 'universities'
     _category_name = 'Університет'
+    _column = 'univ_id'
 
     @staticmethod
     def get_all(cur: sqlite3.Cursor):
         return Field.get_all(University._table, cur)
     
     @staticmethod
-    def get_previous(id_, cur: sqlite3.Cursor):
-        return Field.get_previous(University._table, id_, cur)
+    def get_previous(_client_id, cur: sqlite3.Cursor):
+        return Field.get_previous(University._table, University._column, _client_id, cur)
     
     @staticmethod
     def select_from_db(_id, cur: sqlite3.Cursor):
@@ -145,12 +171,12 @@ class University(Field):
 class OrderType(Field):
     _table = 'types'
     _category_name = 'Тип роботи'
+    _column = 'type_id'
 
     def __init__(self, name, kind, id_=None, **args) -> None:
         super().__init__(name, id_)
         self.__kind = None
         self.kind = kind
-        print(self.kind)
     
     @property
     def kind(self):
@@ -201,8 +227,8 @@ class OrderType(Field):
         return Field.get_all(OrderType._table, cur)
     
     @staticmethod
-    def get_previous(id_, cur: sqlite3.Cursor):
-        return Field.get_previous(OrderType._table, id_, cur)
+    def get_previous(_client_id, cur: sqlite3.Cursor):
+        return Field.get_previous(OrderType._table, OrderType._column, _client_id, cur)
         
 class Admin(AbstractModel):
     
@@ -227,7 +253,6 @@ class Client(AbstractModel):
             insert_client = """INSERT INTO clients(telegram_id, first_name, last_name, user_name, phone_number)
                                 VALUES (?, ?, ?, ?, ?)"""
             values = (self.telegram_id, self.first_name, self.last_name, self.user_name, self.phone)
-            print(values)
             cur.execute(insert_client, values)    
 
     @staticmethod
@@ -499,6 +524,6 @@ class Solutions(defaultdict):
 
 
 if __name__ == '__main__':
-    a = Loader.load_from_db(2, Order)
+    a = DBWorker.load_from_db(2, Order)
     print(a.subject)
         

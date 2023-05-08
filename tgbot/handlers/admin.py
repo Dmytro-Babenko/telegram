@@ -78,7 +78,6 @@ async def set_kind(cb: types.CallbackQuery, state: FSMContext, callback_data):
 
 def create_obj(category, name, kind=None, **args):
     class_ = CATEGORIES.get(category)
-    print(kind)
     field: University|Subject|OrderType = class_(name, kind)
     return field
 
