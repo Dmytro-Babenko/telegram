@@ -1,7 +1,7 @@
 from aiogram import Dispatcher, types,filters
 from aiogram.dispatcher import FSMContext
 
-from tgbot.database.models import OrderType, University, Subject
+from tgbot.database.models import OrderType, University, Subject, DBWorker
 from tgbot.filters.admin_filters import IsAdmin
 from tgbot.FSMStates.admin import FSMAdding
 from tgbot.keyboards.inline_kb import make_choose_kb, make_kind_kb, yes_no_kb
@@ -14,8 +14,6 @@ CATEGORIES = {
     'Університет': University,
     'Тип': OrderType
 }
-
-
 
 async def cancel_adding(update: types.Message|types.CallbackQuery, state: FSMContext):
     await state.finish()
@@ -33,7 +31,7 @@ async def add(message: types.Message, state: FSMContext):
         data['hendlers_dct'] = STATE_GR_AND_BACK_HENDLERS
 
 async def ask_to_choose_category(message: types.Message, *args):
-    categories_kb = await make_choose_kb('categories')
+    categories_kb = make_choose_kb(CATEGORIES, cb_d.categories_cb_data)
     await message.answer('Оберіть тип', reply_markup=categories_kb)
 
 async def choose_category(cb: types.CallbackQuery, state: FSMContext, callback_data):
@@ -88,10 +86,10 @@ async def ask_confirmation(message: types.Message, __obj):
     await message.answer('Підтверджуєте інформацію?', reply_markup=kb)
     
 @hfh.errors_interceptor
-async def add_to_db(message: types.Message, state: FSMContext, *args, **kwargs):
+async def add_to_db(message: types.Message, state: FSMContext, db_worker: DBWorker,*args, **kwargs):
     data = await state.get_data()
     field: University|Subject|OrderType  = data['obj']
-    field.insert_to_db()
+    db_worker.insert(field)
     await state.finish()
     await message.answer('Готово')
 
@@ -110,4 +108,6 @@ def hendler_registration(dp: Dispatcher):
     dp.register_callback_query_handler(set_kind, cb_d.kind_cb_data.filter(), state=FSMAdding.kind)
     dp.register_callback_query_handler(add_to_db, cb_d.yes_cb_data.filter(), state=FSMAdding.confirmation)
     dp.register_callback_query_handler(cancel_adding, cb_d.no_cb_data.filter(), state=FSMAdding.confirmation)
+
+    dp.register_message_handler(start_admin_panel, IsAdmin())
     pass

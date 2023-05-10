@@ -68,24 +68,26 @@ async def set_client(message: types.Message, state: FSMContext, db_worker: model
         data['client'] = client
     
     await FSMCreateOrder.next()
-    await ask_to_choose_type(message)
+    await ask_to_choose_type(message, db_worker)
 
-async def ask_to_choose_type(message: types.Message, *args):
-    inl_kb = await inline_kb.make_choose_kb('type_order')
+async def ask_to_choose_type(message: types.Message, db_worker: models.DBWorker, *args):
+    order_types = db_worker.load_all(models.OrderType)
+    inl_kb = inline_kb.make_choose_kb(order_types, cb_d.type_order_cb_data)
     await message.answer('Оберіть тип роботи будь ласка', reply_markup=inl_kb)
 
-async def choose_order_type(cq: types.CallbackQuery, state: FSMContext, callback_data: dict):
+async def choose_order_type(cq: types.CallbackQuery, state: FSMContext, callback_data: dict, db_worker: models.DBWorker):
     message = cq.message
     order_type = callback_data['choice']
+    print(order_type, type(order_type))
     await message.answer('Тип обрано')
     async with state.proxy() as data:
         data['type_order'] = order_type
-        # data['kind_order'] = models.Order.get_kind(order_type)
     await FSMCreateOrder.next()
-    await ask_to_choose_sb(message)
+    await ask_to_choose_sb(message, db_worker)
 
-async def ask_to_choose_sb(message:types.Message, *args):
-    inl_kb = await inline_kb.make_choose_kb('subject')
+async def ask_to_choose_sb(message:types.Message, db_worker:models.DBWorker, *args):
+    subjects = db_worker.load_all(models.Subject)
+    inl_kb = inline_kb.make_choose_kb(subjects, cb_d.subject_cb_data)
     await message.answer('Оберіть предмет', reply_markup=inl_kb)
 
 async def choose_order_sb(cq: types.CallbackQuery, state: FSMContext, callback_data: dict, raw_state):
@@ -171,8 +173,9 @@ async def choose_theeme_or_variant(message: types.Message, state: FSMContext):
     await FSMCreateOrder.next()
     await ask_to_send_files(message, state)
 
-async def ask_to_send_files(message:types.Message, state: FSMContext):
-    await message.answer('Відправте файли', reply_markup=reply_kb.make_create_order_kb(confirm=True, cancel_files=True))
+async def ask_to_send_files(message:types.Message, state: FSMContext, *args):
+    kb = reply_kb.make_create_order_kb(confirm=True, cancel_files=True)
+    await message.answer('Відправте файли', reply_markup=kb)
     async with state.proxy() as data:
         data['task_files'] = models.Files()
 
@@ -230,7 +233,9 @@ async def finish_order_creation(message: types.Message, state: FSMContext, db_wo
     data = await state.get_data()
     
     client = data['client']
+    print(client)
     type_order = data['order_type']
+    print(type_order)
     university = db_worker.load_by_name(data['university'], models.University)
     subject = db_worker.load_by_name(data['subject'], models.Subject)
     task_files: models.Files = data['task_files']
@@ -247,12 +252,12 @@ async def finish_order_creation(message: types.Message, state: FSMContext, db_wo
     await message.answer(order_description)
     await task_files.answer_files(message)
     await solution_files.answer_solutions(message)
-    order.insert_to_db()
+    db_worker.insert(order)
 
 async def no_command(update: types.Message|types.CallbackQuery, state:FSMContext):
     await update.answer('Неправильна команда, користуйтеся підсказками бота')
 
-async def no_state(message: types.Message, db_worker, *args):
+async def no_state(message: types.Message, db_worker, *args, **kwargs):
     main_kb = reply_kb.make_main_kb()
     await message.answer('Скористайтесь меню', reply_markup=main_kb)
 
@@ -293,9 +298,7 @@ def handlers_registration(dp: Dispatcher):
     dp.register_message_handler(get_text_solution, state=FSMCreateOrder.solutions, regexp=r'.{20,}') 
     dp.register_message_handler(get_solution_files, state=[FSMCreateOrder.solutions], content_types=['document', 'photo'])
 
-    dp.register_message_handler(no_state, state=None)
-    dp.register_callback_query_handler(no_command, state='*')
-    dp.register_message_handler(no_command, state='*')
+
 
 
 

@@ -20,7 +20,7 @@ async def back(message: types.Message, state: FSMContext, db_worker):
         await hfh.delete_state_value(state)
     back_hendler = return_hendlers.get(previous_name, no_command if previous_name else no_state)
     # print(await state.get_data())
-    await back_hendler(message, state, db_worker)
+    await back_hendler(message, state=state, db_worker=db_worker)
 
 def get_full_name(first_name, last_name):
     return f'{first_name} {last_name}' if last_name else first_name
@@ -48,8 +48,8 @@ async def registration(message:types.Message, state:FSMContext):
     else:
         await message.answer('Вибачте, це не ваш контакт')
 
-async def no_command(update: types.Message|types.CallbackQuery, *args):
-    await update.answer('There are no command')
+async def wrong_command(update: types.Message|types.CallbackQuery, *args):
+    await update.answer('Неправильна команда')
 
 async def no_state(update: types.Message|types.CallbackQuery, *args):
     await update.answer('Скористайтесь меню', reply_markup=reply_kb.make_main_kb())
@@ -61,10 +61,13 @@ async def send_link_to_admin(message: types.Message, admin):
         )
     
 def hendlers_registration(dp: Dispatcher):
-    dp.register_message_handler(back, filters.Text('Назад'), state='*')
+    # dp.register_message_handler(back, filters.Text('Назад'), state='*')
     dp.register_message_handler(known_start, commands='start')
     dp.register_message_handler(registration,content_types='contact', state=FSMRegistration.contact)
     dp.register_message_handler(send_link_to_admin, filters.Text(equals='Написати адміну'))
     # dp.register_message_handler(no_command)
     
+    dp.register_message_handler(no_state, state=None)
+    dp.register_callback_query_handler(wrong_command, state='*')
+    dp.register_message_handler(wrong_command, state='*')
 

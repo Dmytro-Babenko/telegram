@@ -25,9 +25,9 @@ def register_filters(dp: Dispatcher):
     pass
 
 def register_handlers(dp: Dispatcher):
-    common.hendlers_registration(dp)
-    admin.hendler_registration(dp)
     create_order.handlers_registration(dp)
+    admin.hendler_registration(dp)
+    common.hendlers_registration(dp)
     pass
 
 def main():

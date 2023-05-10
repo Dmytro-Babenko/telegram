@@ -13,9 +13,6 @@ PHOTO_EXTENSION='.jpg'
 DB_FILE = 'test.db'
 
 class ConnectionPool:
-    # _max_size = 2
-    # _db = DB_FILE
-    # _pull = Queue(_max_size)
 
     def __init__(self, max_size=2, db_file=DB_FILE) -> None:
         self._max_size = max_size
@@ -31,11 +28,8 @@ class ConnectionPool:
             return sqlite3.connect(self._db)
     
     def put_conn(self, conn: sqlite3.Connection):
-        # print(self._pull.queue)
         if self._pull.qsize() < self._max_size:
-            # print('a')
             self._pull.put(conn, block=False)
-            # print(self._pull.queue)
         else:
             conn.close()
 
@@ -62,18 +56,22 @@ class DBWorker:
     def load_previous(self, id_, __class):
         cur = self.conn.cursor()
         return __class.get_previous(id_, cur)
+    
+    def insert(self, __object):
+        cur = self.conn.cursor()
+        __object.insert_to_db(cur)
 
 
 class AbstractModel:
     def __init__(self) -> None:
-        pass
+        raise NotImplementedError
 
-    def insert_to_db(self):
-        pass
+    def insert_to_db(self, cur):
+        raise NotImplementedError
 
     @staticmethod
     def select_from_db():
-        pass 
+        raise NotImplementedError
 
 class Field(AbstractModel):
     _table = None
@@ -88,11 +86,9 @@ class Field(AbstractModel):
     def __repr__(self) -> str:
         return self.name
 
-    def insert_to_db(self):
-        with sqlite3.connect(DB_FILE) as con:
-            cur = con.cursor()
-            insert_sql= f'INSERT INTO {self._table} (name) VALUES (?)'
-            cur.execute(insert_sql, (self.name,))
+    def insert_to_db(self, cur):
+        insert_sql= f'INSERT INTO {self._table} (name) VALUES (?)'
+        cur.execute(insert_sql, (self.name,))
 
     def show_info(self):
         characteristics = {
@@ -199,11 +195,9 @@ class OrderType(Field):
         }
         return '\n'.join(f'{char}: {value}' for char, value in characteristics.items() if value)
     
-    def insert_to_db(self):
-        with sqlite3.connect(DB_FILE) as con:
-            cur = con.cursor()
-            insert_sql= f'INSERT INTO {self._table} (name, kind) VALUES (?, ?)'
-            cur.execute(insert_sql, (self.name, self.kind))
+    def insert_to_db(self, cur):
+        insert_sql= f'INSERT INTO {self._table} (name, kind) VALUES (?, ?)'
+        cur.execute(insert_sql, (self.name, self.kind))
 
         
     @staticmethod
@@ -247,13 +241,11 @@ class Client(AbstractModel):
         self.phone = phone_num
         pass
 
-    def insert_to_db(self):
-        with sqlite3.connect(DB_FILE) as con:
-            cur = con.cursor()
-            insert_client = """INSERT INTO clients(telegram_id, first_name, last_name, user_name, phone_number)
-                                VALUES (?, ?, ?, ?, ?)"""
-            values = (self.telegram_id, self.first_name, self.last_name, self.user_name, self.phone)
-            cur.execute(insert_client, values)    
+    def insert_to_db(self, cur):
+        insert_client = """INSERT INTO clients(telegram_id, first_name, last_name, user_name, phone_number)
+                            VALUES (?, ?, ?, ?, ?)"""
+        values = (self.telegram_id, self.first_name, self.last_name, self.user_name, self.phone)
+        cur.execute(insert_client, values)    
 
     @staticmethod
     def select_from_db(telegram_id, cur):
@@ -286,21 +278,17 @@ class Order(AbstractModel):
         values = (self.type_order, self.subject, self.datetime, self.t_or_v)
         return '\n'.join(f'{point}: {value}' for point, value in zip(points, values))        
 
-    def insert_to_db(self):
+    def insert_to_db(self, cur):
+        cur.row_factory = lambda cursor, row: row[0]
+        insert_order = """INSERT INTO orders (client_id, type_id, subject_id, order_date, univ_id, theme_or_variant)
+                        VALUES (?, ?, ?, ?, ?, ?) """
+        values = (self.client.telegram_id, self.type_order.id, self.subject.id, 
+                    self.datetime, self.university.id, self.t_or_v)
+        cur.execute(insert_order, values)
+        self.order_id = cur.lastrowid
 
-        with sqlite3.connect(DB_FILE) as con:
-            con.row_factory = lambda cursor, row: row[0]
-            cur = con.cursor()
-
-            insert_order = """INSERT INTO orders (client_id, type_id, subject_id, order_date, univ_id, theme_or_variant)
-                            VALUES (?, ?, ?, ?, ?, ?) """
-            values = (self.client.telegram_id, self.type_order.id, self.subject.id, 
-                      self.datetime, self.university.id, self.t_or_v)
-            cur.execute(insert_order, values)
-            self.order_id = cur.lastrowid
-
-            self.task_files.insert_to_db(self.order_id, cur, 'task')
-            self.solutions.insert_to_db(self.order_id, cur)
+        self.task_files.insert_to_db(self.order_id, cur, 'task')
+        self.solutions.insert_to_db(self.order_id, cur)
 
     # @staticmethod
     # def get_kind(order_type):
