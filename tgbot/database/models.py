@@ -14,11 +14,18 @@ DB_FILE = 'test.db'
 
 class ConnectionPool:
 
+    __instance = None
+
     def __init__(self, max_size=2, db_file=DB_FILE) -> None:
         self._max_size = max_size
         self._db = db_file
         self._pull = Queue(max_size)
         pass
+
+    def __new__(cls, *args, **kwargs):
+        if cls.__instance is None:
+            cls.__instance = super().__new__(ConnectionPool, *args, **kwargs)
+        return cls.__instance
 
     def get_conn(self):
         # print(self._pull.queue)
@@ -33,13 +40,31 @@ class ConnectionPool:
         else:
             conn.close()
 
+class ConectionController:
+    def __init__(self, conn_pull = ConnectionPool()) -> None:
+        self.conn_pull = conn_pull
+        self.curent_conn = None
+        pass
+
+    def __enter__(self):
+        self.conn = self.conn_pull.get_conn()
+        return DBWorker(self.conn)
+    
+    def __exit__(self, exception_type, exception_value, traceback):
+        self.conn_pull.put_conn(self.conn)
+
 
 class DBWorker:
-    db = DB_FILE
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(self, conn: sqlite3.Connection = ConnectionPool().get_conn()) -> None:
         self.conn = conn
         pass
+
+    def __enter__(self):
+        return self
+    
+    def __exit__(self, exception_type, exception_value, traceback, conn=None):
+        self.put_conn(conn)
 
     def load_from_db(self, __id, __class):
         cur = self.conn.cursor()
@@ -412,10 +437,6 @@ class DocElement(types.InputMediaDocument, FileElement):
         if cur:
             cur.execute(sql, values)
             return None
-        
-        # with sqlite3.connect(DB_FILE) as con:
-        #     cur = con.cursor()
-        #     cur.execute(sql, values)
 
 class TextElement(FileElement, UserString):
 
@@ -512,6 +533,8 @@ class Solutions(defaultdict):
 
 
 if __name__ == '__main__':
-    a = DBWorker.load_from_db(2, Order)
-    print(a.subject)
-        
+    with ConectionController() as db_worker:
+        print(id(db_worker.conn))
+
+    with ConectionController() as db:
+        print(id(db.conn))

@@ -54,6 +54,7 @@ async def start_admin_creating(message: types.Message, state: FSMContext, *args)
         data['hendlers_dct'] = STATE_GR_AND_BACK_HENDLERS
 
 async def set_client(message: types.Message, state: FSMContext, db_worker: models.DBWorker):
+    print(id(db_worker.conn))
     client_id = message.forward_from.id
     if client_id in db_worker.load_all(models.Client):
         client = db_worker.load_from_db(client_id, models.Client)
@@ -78,7 +79,7 @@ async def ask_to_choose_type(message: types.Message, db_worker: models.DBWorker,
 async def choose_order_type(cq: types.CallbackQuery, state: FSMContext, callback_data: dict, db_worker: models.DBWorker):
     message = cq.message
     order_type = callback_data['choice']
-    print(order_type, type(order_type))
+    print(id(db_worker.conn))
     await message.answer('Тип обрано')
     async with state.proxy() as data:
         data['type_order'] = order_type
@@ -86,6 +87,7 @@ async def choose_order_type(cq: types.CallbackQuery, state: FSMContext, callback
     await ask_to_choose_sb(message, db_worker)
 
 async def ask_to_choose_sb(message:types.Message, db_worker:models.DBWorker, *args):
+    print(id(db_worker.conn))
     subjects = db_worker.load_all(models.Subject)
     inl_kb = inline_kb.make_choose_kb(subjects, cb_d.subject_cb_data)
     await message.answer('Оберіть предмет', reply_markup=inl_kb)
@@ -163,6 +165,7 @@ async def ask_to_choose_theeme_var(message:types.Message, state: FSMContext, db_
     async with state.proxy() as data:
         order_type = db_worker.load_by_name(data['type_order'], models.OrderType)
         data['order_type'] = order_type
+    print(id(db_worker.conn))
     kind = order_type.kind
     text = 'Напишіть тему' if kind == 'оф' else 'Напишіть варіант'
     await message.answer(text)
@@ -233,9 +236,7 @@ async def finish_order_creation(message: types.Message, state: FSMContext, db_wo
     data = await state.get_data()
     
     client = data['client']
-    print(client)
     type_order = data['order_type']
-    print(type_order)
     university = db_worker.load_by_name(data['university'], models.University)
     subject = db_worker.load_by_name(data['subject'], models.Subject)
     task_files: models.Files = data['task_files']
