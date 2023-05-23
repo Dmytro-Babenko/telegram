@@ -211,12 +211,6 @@ async def get_text_solution(message: types.Message, state: FSMContext):
         hfh.put_sollution_to_data(data, file, task_num=task_num)
 
 async def finish_sending_task(message: types.Message, state: FSMContext):
-    # bot = message.bot
-    # async with state.proxy() as data:
-    #     for i, (id, stem) in enumerate(data['files'], 1):
-    #         file_name = f'{data["t_or_v"]}{i}{stem}'
-    #         await bot.download_file_by_id(id, file_name)
-
     await FSMCreateOrder.next()
     await ask_to_send_solution(message, state)
 
