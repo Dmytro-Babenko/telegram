@@ -5,7 +5,8 @@ from aiogram.dispatcher.handler import ctx_data
 
 from tgbot.keyboards.inline_kb import BUTTONS
 from tgbot.FSMStates.client_st import FSMCreateOrder
-from tgbot.database.models import Client, University, DBWorker
+from tgbot.database.models.fields import Client, University
+from tgbot.database.models.conection import DBWorker
 
 
 class ListStateFilter(BoundFilter):

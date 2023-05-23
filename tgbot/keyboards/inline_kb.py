@@ -1,6 +1,6 @@
 from aiogram.types.inline_keyboard import InlineKeyboardButton, InlineKeyboardMarkup
 
-from tgbot.database.models import OrderType, University, Subject, DBWorker
+# from tgbot.database.models_old import OrderType, University, Subject, DBWorker
 from tgbot.utils import callback_data as cb_d
 
 

@@ -196,7 +196,8 @@ class Task(Files):
     __column = 'task'
 
     async def send_files(self, bot: Bot, chat_id):
-        await bot.send_message(chat_id, self.__sign)
+        if self:
+            await bot.send_message(chat_id, self.__sign)
         await super().send_files(bot, chat_id)
 
     def insert_to_db(self, order_id, cur):
@@ -206,8 +207,11 @@ class Task(Files):
         super().add_from_db(order_id, self.__column, cur)
 
 class Solutions(defaultdict):
+    __sign = 'Завдання'
 
     async def send_solutions(self, bot: Bot, chat_id):
+        if self:
+            bot.send_message(chat_id, self.__sign)
         for num, files in self.items():
             if num:
                 await bot.send_message(chat_id, num)

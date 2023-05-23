@@ -236,7 +236,7 @@ class OrderDate:
         self.value = value
 
     def __str__(self) -> str:
-        return self.value.strftime('%d/%m/%y, %H:%M')
+        return self.value.strftime('%d.%m.%y %H:%M')
     
     def __repr__(self) -> str:
         return str(self)
@@ -244,10 +244,13 @@ class OrderDate:
     def get_key(self):
         return self.value
     
+    def set_time(self, time: datetime):
+        self.value = datetime.combine(self.value, time)
+    
 class OrderTorV:
     _category_name = None
 
-    def __init__(self, value: str) -> None:
+    def __init__(self, value: str = '') -> None:
         self.value = value
 
     def __str__(self) -> str:
@@ -264,3 +267,10 @@ class OrderTheme(OrderTorV):
 
 class OrderVar(OrderTorV):
     _category_name = 'Варіант'
+
+if __name__ == '__main__':
+    a = OrderDate(datetime(2000, 3, 1, 12, 0))
+    print(a)
+    time = datetime.strptime('23:00', '%H:%M').time()
+    a.set_time(time)
+    print(a)

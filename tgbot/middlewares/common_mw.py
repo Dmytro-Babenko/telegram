@@ -6,7 +6,8 @@ from aiogram.dispatcher.middlewares import BaseMiddleware, LifetimeControllerMid
 
 from tgbot.keyboards.reply_kb import make_registration_kb
 from tgbot.FSMStates.client_st import FSMRegistration
-from tgbot.database.models import Client, DBWorker, ConnectionPool
+from tgbot.database.models.fields import Client
+from tgbot.database.models.conection import DBWorker, ConnectionPool
 
 admins = [{'username': 'Dmitriy_babenko87'}]
 # contacts = {}

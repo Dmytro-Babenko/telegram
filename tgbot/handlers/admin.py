@@ -1,7 +1,8 @@
 from aiogram import Dispatcher, types,filters
 from aiogram.dispatcher import FSMContext
 
-from tgbot.database.models import OrderType, University, Subject, DBWorker
+from tgbot.database.models.fields import OrderType, University, Subject
+from tgbot.database.models.conection import DBWorker
 from tgbot.filters.admin_filters import IsAdmin
 from tgbot.FSMStates.admin import FSMAdding
 from tgbot.keyboards.inline_kb import make_choose_kb, make_kind_kb, yes_no_kb

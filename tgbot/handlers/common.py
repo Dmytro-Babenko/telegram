@@ -2,7 +2,7 @@ from aiogram import Dispatcher, types
 from aiogram.dispatcher import filters, FSMContext
 from aiogram.types.reply_keyboard import ReplyKeyboardRemove
 
-from tgbot.database.models import Client
+from tgbot.database.models.fields import Client
 from tgbot.keyboards import reply_kb
 from tgbot.texts import texts
 from tgbot.filters.create_order_filters import ListStateFilter
