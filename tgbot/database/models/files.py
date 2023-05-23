@@ -150,7 +150,6 @@ class Files(UserList):
     def add_element(self, element:DocElement|PhotoElement|TextElement):
         group = element.make_group()
         prev = self.previous_group
-        print(type(prev), type(group))
         if type(group) == type(prev) and self.is_prev_open():
             self.previous_group + group
         else:
@@ -179,6 +178,7 @@ class Files(UserList):
                              (order_id, file_group)).fetchall()
         photo_dct = {pos: PhotoElement(media=telegram_id) for pos, telegram_id in photos}
         
+        # добавить расширение
         documents = cur.execute('SELECT pos, telegram_id FROM documents WHERE order_id = ? AND file_group = ?',
                              (order_id, file_group)).fetchall()
         doc_dct = {pos: DocElement(media=telegram_id, extension='doc') for pos, telegram_id in documents}
@@ -189,6 +189,21 @@ class Files(UserList):
 
         elements = dict(sorted({**photo_dct, **doc_dct, **texts_dct}.items())).values()
         self.add_elements(elements)
+
+
+class Task(Files):
+    __sign = 'Завдання'
+    __column = 'task'
+
+    async def send_files(self, bot: Bot, chat_id):
+        await bot.send_message(chat_id, self.__sign)
+        await super().send_files(bot, chat_id)
+
+    def insert_to_db(self, order_id, cur):
+        super().insert_to_db(order_id, cur, self.__column)
+    
+    def add_from_db(self, order_id, cur: sqlite3.Cursor):
+        super().add_from_db(order_id, self.__column, cur)
 
 class Solutions(defaultdict):
 
@@ -206,7 +221,6 @@ class Solutions(defaultdict):
         for task_num, files in self.items():
             files: Files
             files.insert_to_db(order_id, cur, task_num)
-
 
     def add_from_db(self, order_id, cur: sqlite3.Cursor):
         sql_select_fgr = '''SELECT file_group FROM (SELECT DISTINCT file_group, order_id FROM texts t 

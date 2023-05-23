@@ -1,4 +1,5 @@
 from tgbot.database.models.fields import OrderDate, OrderType, Subject, University, Client, OrderTheme, OrderVar
+from tgbot.database.models.files import Task, Solutions, Files
     
 class OrderDesc:
 
@@ -22,7 +23,7 @@ class OrderDesc:
 
 class Order:
 
-    def __init__(self, client:Client, desc:OrderDesc, id_=None, task_files:Files=None, solutions:Solutions=None, **kwargs) -> None:
+    def __init__(self, client:Client, desc:OrderDesc, id_=None, task_files:Task=None, solutions:Solutions=None, **kwargs) -> None:
         self.order_id = id_
         self.client = client
         self.desc = desc
@@ -62,8 +63,8 @@ class Order:
 
         desc = OrderDesc(order_type, order_subject, order_date, t_or_v, order_univ)
 
-        task_files = Files()
-        task_files.add_from_db(order_id, 'task', cur)
+        task_files = Task()
+        task_files.add_from_db(order_id, cur)
 
         solutions = Solutions(Files)
         solutions.add_from_db(order_id, cur)    
